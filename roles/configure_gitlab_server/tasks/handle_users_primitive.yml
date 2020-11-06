@@ -1,0 +1,86 @@
+---
+
+  - set_fact:
+      _tmp_usr_args: "{{ _user_iter.value.config }}"
+
+  - block:
+
+        ##
+        ## note: generating a very long random password and never telling 
+        ##   anyone seems atm the best way to implement no-password-access, 
+        ##   altough technically password access is still obvious possible 
+        ##   if someone get hold of the pw somehow (e.g. brute forcing), 
+        ##   alternatives:
+        ##
+        ##     - explicitly configure gitlab server to disable pw access 
+        ##       for user: this would be without a doubt the best solution, 
+        ##       but as far as I can tell is not (yet) supported by gitlab
+        ##
+        ##     - use "force_random_password" parameter of gitlab API: this 
+        ##       is more or less the same solution as this, except that the 
+        ##       random pw is created inside gitlab, the one caveat is that 
+        ##       as gitlab API does support this param only for newly 
+        ##       creating users, it cannot be regularly cycled, but by 
+        ##       creating this pw in ansible, a fresh new pw is set every 
+        ##       time ansible is run
+        ##
+        ##     - use "reset_password" parameter of gitlab API and never 
+        ##       acting on the mail:
+        ##
+        ##         * mail is a rather insecure medium
+        ##         * not sure if this is actually technical feasable: 
+        ##             can one interact with the user per ssh / token when pw reset is pending?
+        ##
+        ##         * not sure if this is actual technical secure: 
+        ##             even if the mail is burned and no one had a chance 
+        ##             to see it, is this secure at all having the same 
+        ##             system constantly pw reset pending?
+        ##
+      - set_fact:
+          _tmp_usr_args: >-
+             {{ _tmp_usr_args | combine({
+                  'password': lookup('password', 
+                     '/dev/null length=' ~ gitlab_cfg_normed.random_pwlen
+                  )
+             }) }}
+
+    when: not _user_iter.value.pw_access
+
+
+  - name: manage user  ==>>  {{ _user_iter.key }}
+    smabot.gitlab.modwrap:
+      modname: community.general.gitlab_user
+      modargs: "{{ _tmp_usr_args }}"
+
+_user_iter
+
+
+- name: "Create GitLab User"
+  community.general.gitlab_user:
+    api_url: https://gitlab.example.com/
+    validate_certs: True
+    api_username: dj-wasabi
+    api_password: "MySecretPassword"
+    name: My Name
+    username: myusername
+    password: mysecretpassword
+    email: me@example.com
+    sshkey_name: MySSH
+    sshkey_file: ssh-rsa AAAAB3NzaC1yc...
+    state: present
+    group: super_group/mon_group
+    access_level: owner
+
+
+
+  - include_task: handle_users.yml
+    loop: "{{ _server_iter.value.users | dict2items() }}"
+    loop_control:
+      loop_var: _server_iter
+
+  users:
+
+          bots:
+
+          humans:
+
