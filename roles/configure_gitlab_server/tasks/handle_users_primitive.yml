@@ -52,35 +52,3 @@
       modname: community.general.gitlab_user
       modargs: "{{ _tmp_usr_args }}"
 
-_user_iter
-
-
-- name: "Create GitLab User"
-  community.general.gitlab_user:
-    api_url: https://gitlab.example.com/
-    validate_certs: True
-    api_username: dj-wasabi
-    api_password: "MySecretPassword"
-    name: My Name
-    username: myusername
-    password: mysecretpassword
-    email: me@example.com
-    sshkey_name: MySSH
-    sshkey_file: ssh-rsa AAAAB3NzaC1yc...
-    state: present
-    group: super_group/mon_group
-    access_level: owner
-
-
-
-  - include_task: handle_users.yml
-    loop: "{{ _server_iter.value.users | dict2items() }}"
-    loop_control:
-      loop_var: _server_iter
-
-  users:
-
-          bots:
-
-          humans:
-
