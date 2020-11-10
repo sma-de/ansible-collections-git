@@ -1,0 +1,23 @@
+---
+
+  - name: manage role  ==>>  {{ _cur_role_iter.key }}
+    smabot.gitlab.modwrap:
+      modname: community.general.gitlab_group
+      modargs: "{{ _cur_role_iter.value.config }}"
+
+
+  - name: manage role members  ==>>  {{ _cur_role_iter.key }}
+    smabot.gitlab.modwrap:
+      modname: community.general.gitlab_group_members
+      modargs: "{{ _role_members_iter }}"
+    loop: "{{ _cur_role_iter.value.members._exportcfg | default([], True) }}"
+    loop_control:
+      loop_var: _role_members_iter
+
+
+  - name: handle subroles
+    include_tasks: handle_role.yml
+    loop: "{{ _cur_role_iter.value.subroles | default({}, True) | dict2items() }}"
+    loop_control:
+      loop_var: _cur_role_iter
+

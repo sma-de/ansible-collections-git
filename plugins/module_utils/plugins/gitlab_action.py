@@ -26,7 +26,7 @@ class GitlabBase(BaseAction):
 
     @property
     def argspec(self):
-        tmp = super(ActionModule, self).argspec
+        tmp = super(GitlabBase, self).argspec
 
         tmp.update({
           MAGIC_ARGSPECKEY_META: {
@@ -48,6 +48,7 @@ class GitlabBase(BaseAction):
             'type': list(string_types),
             'defaulting': {
                'ansvar': ['auth_gitlab_token'],
+               'fallback': ''
             },
           },
 
@@ -55,6 +56,7 @@ class GitlabBase(BaseAction):
             'type': list(string_types),
             'defaulting': {
                'ansvar': ['auth_gitlab_user'],
+               'fallback': ''
             },
           },
 
@@ -62,6 +64,7 @@ class GitlabBase(BaseAction):
             'type': list(string_types),
             'defaulting': {
                'ansvar': ['auth_gitlab_pw'],
+               'fallback': ''
             },
           },
 
@@ -125,8 +128,14 @@ class GitlabBase(BaseAction):
     def exec_gitlab_module(self, modname, modargs=None, **kwargs):
         modargs = modargs or {}
 
-        for ap in ['api_token', 'api_username', 'api_password', 'api_token', 'validate_certs']:
+        for ap in ['api_url', 'validate_certs']:
             modargs.setdefault(ap, self.get_taskparam(ap))
+
+        for ap in ['api_username', 'api_password', 'api_token']:
+            tmp = self.get_taskparam(ap)
+
+            if tmp:
+                modargs.setdefault(ap, tmp)
 
         return self.exec_module(modname, modargs=modargs, **kwargs)
 

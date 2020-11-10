@@ -22,7 +22,7 @@
       gitlab_cfg_normed: "{{ _tmp_normres.normalized }}"
 
 
-  - include_task: handle_server_instance.yml
+  - include_tasks: handle_server_instance.yml
     loop: "{{ gitlab_cfg_normed.servers.instances | dict2items() }}"
     loop_control:
       loop_var: _server_iter

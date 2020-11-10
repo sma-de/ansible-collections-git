@@ -1,14 +1,14 @@
 ---
 
   - name: handle bot users
-    include_task: handle_users_bots.yml
+    include_tasks: handle_users_bots.yml
     loop: "{{ _server_iter.value.users.bots | dict2items() }}"
     loop_control:
       loop_var: _user_iter
 
 
   - name: handle human users
-    include_task: handle_users_bots.yml
+    include_tasks: handle_users_humans.yml
     loop: "{{ _server_iter.value.users.humans | dict2items() }}"
     loop_control:
       loop_var: _user_iter

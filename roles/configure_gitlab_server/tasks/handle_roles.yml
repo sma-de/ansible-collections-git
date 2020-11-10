@@ -1,0 +1,9 @@
+---
+
+  - include_tasks: handle_role.yml
+    loop:
+      - key: roles
+        value: "{{ _server_iterv.value.roles }}"
+    loop_control:
+      loop_var: _cur_role_iter
+

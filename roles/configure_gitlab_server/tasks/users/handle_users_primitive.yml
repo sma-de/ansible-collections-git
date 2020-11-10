@@ -2,6 +2,8 @@
 
   - set_fact:
       _tmp_usr_args: "{{ _user_iter.value.config }}"
+    no_log: true
+
 
   - block:
 
@@ -43,6 +45,7 @@
                      '/dev/null length=' ~ gitlab_cfg_normed.random_pwlen
                   )
              }) }}
+        no_log: true
 
     when: not _user_iter.value.pw_access
 
