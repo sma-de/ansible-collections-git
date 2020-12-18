@@ -1,10 +1,18 @@
 ---
 
+  - name:
+    include_role: 
+      name: "{{ _server_iter.custom_prerole }}"
+    vars:
+      gitlab_server_instance: "{{ _iter_sma_gitlabs.value }}"
+    when: _server_iter.custom_prerole
+
+
   - name: handle users
     include_tasks: users/handle_users.yml
 
-  - debug:
-      var: _server_iter
+##  - debug:
+##      var: _server_iter
 
   - name: handle roles
     include_tasks: handle_roles.yml

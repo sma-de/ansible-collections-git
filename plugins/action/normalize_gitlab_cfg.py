@@ -12,6 +12,16 @@ from ansible_collections.smabot.base.plugins.module_utils.utils.dicting import s
 from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ansible_assert
 
 
+
+def user_role_to_cfg(username, urole, cfg):
+    tmp = urole['path'].replace('/', '/subroles/').split('/')
+
+    tmp = get_subdict(cfg, tmp, default_empty=True)
+    setdefault_none(setdefault_none(tmp, 'members', {}), 
+       urole['level'], []
+    ).append(username)
+
+
 class ConfigRootNormalizer(NormalizerBase):
 
     def __init__(self, pluginref, *args, **kwargs):
@@ -100,7 +110,6 @@ class SrvRolesBaseNormalizer(NormalizerBase):
         )
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-        print("cfgpath abs => " + str(cfgpath_abs))
         # do config subkey
         c = setdefault_none(my_subcfg, 'config', defval={})
         setdefault_none(c, 'name', defval=cfgpath_abs[-1])
@@ -178,7 +187,7 @@ class SrvRolesMembersNormalizer(NormalizerBase):
         if not my_subcfg:
             return my_subcfg
 
-        ## if it exists, memebers should be a dict where the keys are 
+        ## if it exists, members should be a dict where the keys are 
         ## valid gitlab access levels (like guest or developer) and 
         ## the values should be a list of users
         exportcfg = []
@@ -225,6 +234,15 @@ class ServerUsrBaseNormalizer(NormalizerBase):
         super(ServerUsrBaseNormalizer, self).__init__(
            pluginref, *args, **kwargs
         )
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        usr_roles = my_subcfg.get('roles', None)
+
+        if usr_roles:
+            for ur in usr_roles:
+                user_role_to_cfg(my_subcfg['config']['username'], ur, cfg)
+
+        return my_subcfg
 
 
 class ServerBotsNormalizer(ServerUsrBaseNormalizer):
