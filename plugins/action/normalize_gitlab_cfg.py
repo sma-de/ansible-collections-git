@@ -322,7 +322,9 @@ class SrvUsrCfgNormalizer(NormalizerNamed):
             ).get('mail_template', None)
 
             if tmp:
-                my_subcfg['email'] = tmp.format(my_subcfg['username'])
+                my_subcfg['email'] = tmp.format(
+                   my_subcfg['username'].replace('_', '-')
+                )
 
         return my_subcfg
 
