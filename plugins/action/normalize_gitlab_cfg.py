@@ -310,6 +310,22 @@ class SrvUsrCfgNormalizer(NormalizerNamed):
     def name_key(self):
         return 'username'
 
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        mail = my_subcfg.get('email', None)
+
+        if not mail:
+            # if not mail address is explicitly given, check if mail 
+            # template is specified for server, if so use this to 
+            # create address with username as param
+            tmp = self.get_parentcfg(
+                cfg, cfgpath_abs, level=3
+            ).get('mail_template', None)
+
+            if tmp:
+                my_subcfg['email'] = tmp.format(my_subcfg['username'])
+
+        return my_subcfg
+
 
 class ActionModule(ConfigNormalizerBaseMerger):
 
