@@ -5,7 +5,7 @@
       name: "{{ _server_iter.custom_prerole }}"
     vars:
       gitlab_server_instance: "{{ _iter_sma_gitlabs.value }}"
-    when: _server_iter.custom_prerole
+    when: _server_iter.get('custom_prerole', False) is truthy
 
 
   - name: handle users
