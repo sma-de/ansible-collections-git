@@ -2,10 +2,10 @@
 
   - name:
     include_role: 
-      name: "{{ _server_iter.custom_prerole }}"
+      name: "{{ _server_iter.value.custom_prerole }}"
     vars:
-      gitlab_server_instance: "{{ _iter_sma_gitlabs.value }}"
-    when: _server_iter.get('custom_prerole', False) is truthy
+      gitlab_server_instance: "{{ _server_iter.value }}"
+    when: _server_iter.value.get('custom_prerole', False) is truthy
 
 
   - name: handle users

@@ -14,7 +14,8 @@ from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ans
 
 
 def user_role_to_cfg(username, urole, cfg):
-    tmp = urole['path'].replace('/', '/subroles/').split('/')
+    tmp = ['roles', 'subroles'] \
+      + urole['path'].replace('/', '/subroles/').split('/')
 
     tmp = get_subdict(cfg, tmp, default_empty=True)
     setdefault_none(setdefault_none(tmp, 'members', {}), 
@@ -235,15 +236,6 @@ class ServerUsrBaseNormalizer(NormalizerBase):
            pluginref, *args, **kwargs
         )
 
-    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
-        usr_roles = my_subcfg.get('roles', None)
-
-        if usr_roles:
-            for ur in usr_roles:
-                user_role_to_cfg(my_subcfg['config']['username'], ur, cfg)
-
-        return my_subcfg
-
 
 class ServerBotsNormalizer(ServerUsrBaseNormalizer):
 
@@ -288,6 +280,17 @@ class SrvUsrNormalizer(NormalizerBase):
     @property
     def config_path(self):
         return [SUBDICT_METAKEY_ANY]
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        usr_roles = my_subcfg.get('roles', None)
+
+        if usr_roles:
+            for ur in usr_roles:
+                user_role_to_cfg(my_subcfg['config']['username'], ur, 
+                  self.get_parentcfg(cfg, cfgpath_abs, level=3)
+                )
+
+        return my_subcfg
 
 
 class SrvUsrCfgNormalizer(NormalizerNamed):
