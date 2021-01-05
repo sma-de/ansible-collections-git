@@ -86,7 +86,6 @@ class GitlabBase(BaseAction):
 
     @property
     def gitlab_auth_token(self):
-        print("gitlab token => " + str(self.get_taskparam('api_token')))
         return self.get_taskparam('api_token')
 
     @property

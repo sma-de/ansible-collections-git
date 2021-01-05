@@ -12,6 +12,11 @@ from ansible.module_utils.six import iteritems, string_types
 from ansible_collections.smabot.gitlab.plugins.module_utils.plugins.gitlab_action import GitlabUserBase
 from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ansible_assert
 
+from ansible.utils.display import Display
+
+
+display = Display()
+
 
 class ActionModule(GitlabUserBase):
 
