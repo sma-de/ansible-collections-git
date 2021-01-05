@@ -103,7 +103,7 @@ class GitlabBase(BaseAction):
 
             tmp = {
               'url': self.gitlab_url,
-              'ssl_verify': self.get_taskparam('verify_ssl'), 
+              'ssl_verify': self.get_taskparam('validate_certs'),
               'private_token': self.gitlab_auth_token,
               'api_version': 4
             }
