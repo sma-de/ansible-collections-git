@@ -140,16 +140,16 @@ class GitlabBase(BaseAction):
         return self.exec_module(modname, modargs=modargs, **kwargs)
 
 
-class GitLabUserBase(GitLabBase):
+class GitlabUserBase(GitlabBase):
 
     def __init__(self, *args, **kwargs):
-        super(GitLabUserBase, self).__init__(*args, **kwargs)
+        super(GitlabUserBase, self).__init__(*args, **kwargs)
         self._glusr = None
 
 
     @property
     def argspec(self):
-        tmp = super(GitLabUserBase, self).argspec
+        tmp = super(GitlabUserBase, self).argspec
 
         tmp.update({
           'user': (list(string_types)),
@@ -169,7 +169,7 @@ class GitLabUserBase(GitLabBase):
 
             # get user object
             display.vv(
-              "GitLabUserBase :: Querying gitlab user for"\
+              "GitlabUserBase :: Querying gitlab user for"\
               " given name '{}'".format(usrname)
             )
 
@@ -187,13 +187,13 @@ class GitLabUserBase(GitLabBase):
                 )
 
             self._glusr = tmp[0]
-            display.vv("GitLabUserBase :: Found user on gitlab")
+            display.vv("GitlabUserBase :: Found user on gitlab")
 
         return self._glusr
 
 
     def re_auth(self, **kwargs):
-        super(GitLabUserBase, self).re_auth(**kwargs)
+        super(GitlabUserBase, self).re_auth(**kwargs)
 
         ## note: as re-authing atm makes it necessary to replace 
         ##   the client instance with a new one we also need to 
