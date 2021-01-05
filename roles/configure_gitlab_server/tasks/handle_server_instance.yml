@@ -1,11 +1,10 @@
 ---
 
-  - name:
+  - name: handle gitlab authing
     include_role: 
-      name: "{{ _server_iter.value.custom_prerole }}"
+      name: smabot.gitlab.auth_gitlab
     vars:
-      gitlab_server_instance: "{{ _server_iter.value }}"
-    when: _server_iter.value.get('custom_prerole', False) is truthy
+      server_instance: "{{ _server_iter.value }}"
 
 
   - name: handle users

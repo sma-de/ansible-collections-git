@@ -1,0 +1,19 @@
+---
+
+  - set_fact:
+     auh_gitlab_url: "{{ server_instance.url }}"
+
+
+  - name: get gitlab authing secret by default hashivault method
+    include_role: 
+      name: smabot.gitlab.auth_gitlab_hashivault
+    when: >-
+      server_instance.get('auth', {}).get('hvault_path', None) is truthy
+
+
+  - name: use custom gitlab authing method
+    include_role: 
+      name: "{{ server_instance.auth.custom_method }}"
+    when: >-
+      server_instance.get('auth', {}).get('custom_method', None) is truthy
+

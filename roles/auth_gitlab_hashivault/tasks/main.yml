@@ -1,0 +1,8 @@
+---
+
+  - set_fact:
+     auth_gitlab_token: >-
+       {{ lookup('community.general.hashi_vault', 
+            server_instance.auth.hvault_path + ':token'
+       ) }}
+
