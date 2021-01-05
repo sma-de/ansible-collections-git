@@ -103,7 +103,7 @@ class GitlabBase(BaseAction):
 
             tmp = {
               'url': self.gitlab_url,
-              'ssl_verify': self._callparams['verify_ssl'], 
+              'ssl_verify': self.get_taskparam('verify_ssl'), 
               'private_token': self.gitlab_auth_token,
               'api_version': 4
             }
@@ -138,4 +138,65 @@ class GitlabBase(BaseAction):
                 modargs.setdefault(ap, tmp)
 
         return self.exec_module(modname, modargs=modargs, **kwargs)
+
+
+class GitLabUserBase(GitLabBase):
+
+    def __init__(self, *args, **kwargs):
+        super(GitLabUserBase, self).__init__(*args, **kwargs)
+        self._glusr = None
+
+
+    @property
+    def argspec(self):
+        tmp = super(GitLabUserBase, self).argspec
+
+        tmp.update({
+          'user': (list(string_types)),
+        })
+
+        return tmp
+
+
+    @property
+    def gitlab_user(self):
+        return self.get_glusr()
+
+
+    def get_glusr(self, forced_reload=False):
+        if not self._glusr or forced_reload:
+            usrname = self.get_taskparam('user')
+
+            # get user object
+            display.vv(
+              "GitLabUserBase :: Querying gitlab user for"\
+              " given name '{}'".format(usrname)
+            )
+
+            tmp = self.gitlab_client.users.list(username=usrname)
+
+            if not tmp: 
+                return AnsibleError(
+                  "Could not find a gitlab user named '{}'".format(usrname)
+                )
+
+            if len(tmp) > 1: 
+                return AnsibleAssertionError(
+                  "Found more than one user matching given" \
+                  " name '{}'".fromat(usrname)
+                )
+
+            self._glusr = tmp[0]
+            display.vv("GitLabUserBase :: Found user on gitlab")
+
+        return self._glusr
+
+
+    def re_auth(self, **kwargs):
+        super(GitLabUserBase, self).re_auth(**kwargs)
+
+        ## note: as re-authing atm makes it necessary to replace 
+        ##   the client instance with a new one we also need to 
+        ##   force a reload here of the user object
+        self.get_glusr(forced_reload=True)
 
