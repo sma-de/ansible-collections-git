@@ -109,6 +109,7 @@ class GitlabBase(BaseAction):
             }
 
             tmp.update(kwargs)
+            import gitlab
             tmp = gitlab.Gitlab(**tmp)
             tmp.auth()
 
