@@ -1,7 +1,7 @@
 ---
 
   - set_fact:
-     auh_gitlab_url: "{{ server_instance.url }}"
+     auth_gitlab_url: "{{ server_instance.url }}"
 
 
   - name: get gitlab authing secret by default hashivault method

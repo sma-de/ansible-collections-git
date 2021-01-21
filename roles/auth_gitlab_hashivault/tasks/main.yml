@@ -1,9 +1,10 @@
 ---
 
+##       {{ lookup('community.hashi_vault.hashi_vault', 
   - set_fact:
      auth_gitlab_token: >-
-       {{ lookup('community.general.hashi_vault', 
+       {{ lookup('smabot.hashivault.hashivault_ex', 
             server_instance.auth.hvault_path + ':token'
        ) }}
-    no_log: true
+    no_log: "{{ not (disable_secret_log_hiding | default(false, True)) }}"
 

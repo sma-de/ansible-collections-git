@@ -39,7 +39,7 @@ class GitlabBase(BaseAction):
           'api_url': {
             'type': list(string_types),
             'defaulting': {
-               'ansvar': ['auh_gitlab_url'],
+               'ansvar': ['auth_gitlab_url'],
 ##         'env': '',
             },
           },
