@@ -1,7 +1,7 @@
 ---
 
 namespace: "smabot"
-name: "gitlab"
+name: "git"
 version: "1.0.0"
 readme: "README.md"
 
