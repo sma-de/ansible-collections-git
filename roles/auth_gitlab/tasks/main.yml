@@ -6,7 +6,7 @@
 
   - name: get gitlab authing secret by default hashivault method
     include_role: 
-      name: smabot.gitlab.auth_gitlab_hashivault
+      name: smabot.git.auth_gitlab_hashivault
     when: >-
       server_instance.get('auth', {}).get('hvault_path', None) is truthy
 
