@@ -45,7 +45,7 @@
                      '/dev/null length=' ~ gitlab_cfg_normed.random_pwlen
                   )
              }) }}
-        no_log: true
+        no_log: "{{ not (disable_secret_log_hiding | default(false, True)) }}"
 
     when: not _user_iter.value.pw_access
 
