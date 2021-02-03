@@ -1,13 +1,13 @@
 ---
 
   - name: manage role  ==>>  {{ _cur_role_iter.key }}
-    smabot.gitlab.modwrap:
+    smabot.git.gitlab_modwrap:
       modname: community.general.gitlab_group
       modargs: "{{ _cur_role_iter.value.config }}"
 
 
   - name: manage role members  ==>>  {{ _cur_role_iter.key }}
-    smabot.gitlab.modwrap:
+    smabot.git.gitlab_modwrap:
       modname: community.general.gitlab_group_members
       modargs: "{{ _role_members_iter }}"
     loop: "{{ _cur_role_iter.value.members._exportcfg | default([], True) }}"

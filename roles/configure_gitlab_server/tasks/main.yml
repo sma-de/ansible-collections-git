@@ -15,7 +15,7 @@
 ##          humans:
 
 
-  - smabot.gitlab.normalize_gitlab_cfg:
+  - smabot.git.normalize_gitlab_cfg:
     register: _tmp_normres
 
   - set_fact:

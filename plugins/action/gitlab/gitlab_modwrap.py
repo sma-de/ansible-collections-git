@@ -9,7 +9,7 @@ import collections
 ####from ansible.module_utils._text import to_native
 from ansible.module_utils.six import iteritems, string_types
 
-from ansible_collections.smabot.gitlab.plugins.module_utils.plugins.gitlab_action import GitlabBase
+from ansible_collections.smabot.git.plugins.module_utils.plugins.gitlab_action import GitlabBase
 from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ansible_assert
 
 

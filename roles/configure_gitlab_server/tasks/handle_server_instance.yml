@@ -2,7 +2,7 @@
 
   - name: handle gitlab authing
     include_role: 
-      name: smabot.gitlab.auth_gitlab
+      name: smabot.git.auth_gitlab
     vars:
       server_instance: "{{ _server_iter.value }}"
 
