@@ -96,14 +96,11 @@ class SrvRolesBaseNormalizer(NormalizerBase):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
           SrvRolesMembersNormalizer(pluginref),
-        ]
 
-        ## note: for recursive structures, the sub normalizers can only 
-        ##   be instantiated if the corresponding key actually exists 
-        ##   to avoid indefinite recursions of death
-        lazy_subnorms = kwargs.setdefault('sub_normalizers_lazy', [])
-        lazy_subnorms += [
-          SrvSubRolesNormalizer,
+          ## note: for recursive structures, the sub normalizers can only 
+          ##   be instantiated if the corresponding key actually exists 
+          ##   to avoid indefinite recursions of death
+          (SrvSubRolesNormalizer, True),
         ]
 
         super(SrvRolesBaseNormalizer, self).__init__(
