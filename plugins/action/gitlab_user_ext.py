@@ -29,7 +29,7 @@ class ActionModule(GitlabUserBase):
     UPSTREAM_USER_MODULE = 'community.general.gitlab_user'
 
     UPSTREAM_FORWARDING_PARAMS = [
-      'username', 'name', 'password', 'email', 'state',
+      'username', 'name', 'password', 'email', 'state', 'external',
     ]
 
 
@@ -57,6 +57,7 @@ class ActionModule(GitlabUserBase):
           'email': (list(string_types) + [type(None)], None),
 
           'confirm': ([bool], True),
+          'external': ([bool] + [type(None)], None),
 
           'state': (list(string_types), 'present'),
         })

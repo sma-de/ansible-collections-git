@@ -1,0 +1,125 @@
+---
+
+  ##
+  ## smabot_git_gitlab_manage_groups_and_repos_args:
+  ##
+  ##   groups:
+  ##     groups:
+  ##
+  ##       <grp-X>:
+  ##         path: ## defaults to mapkey
+  ##         name: ## defaults to path
+  ##         fullpath: ## always this grps path + the path of all its parents
+  ##
+  ##         basic_management: ## creating or deleting group and managing some other core attributes
+  ##           enable: true/false ## enable or disable 
+  ##
+  ##         members:
+  ##           enable: true/false ## enable or completly disable members handling for this group
+  ##           default_role:
+  ##           users:
+  ##             default_role:
+  ##             exclusive: ## defaults to false
+  ##             members:
+  ##               <user-a>: <role-mapping>
+  ##               <user-a>:
+  ##                  name: ## defaults to mapkey
+  ##                  role: ## defaults to default role
+  ##           groups:
+  ##             default_role:
+  ##             exclusive: ## defaults to false
+  ##             members:
+  ##
+  ##       bar/boo/baz:  <-- can specify "deep" subgrp directly, in that case parents are auto generated
+  ##         path: ## defaults to mapkey
+  ##
+  ##       ## alternative other explicit method to define group trees
+  ##       bar:
+  ##         path: ## defaults to mapkey
+  ##         subgroups:
+  ##           baz:
+  ##             subgroups:
+  ##               foo:
+  ##
+  ##       bar/boo/baz:  <-- can specify "deep" subgrp directly, in that case parents are auto generated
+  ##
+  ##         ##
+  ##         ## grpgen describes how options for implicit parent
+  ##         ## groups or explicit child groups should be set,
+  ##         ## for explicit child groups you can obviously overwrite any
+  ##         ## settings explicitly by setting in the child definition verbatim
+  ##         ##
+  ##         grpgen:
+  ##
+  ##           ## for defaulting implicit groups get the standard
+  ##           ## normalizer defaults values set, not more not less,
+  ##           ## defaulting method is actually also the default
+  ##           ## when unspecified
+  ##           base_method: defaulting
+  ##
+  ##           ## inherting implicit groups "inherit" the config options set for the explicit base group
+  ##           base_method: inheriting
+  ##
+  ##           overwrites_all:
+  ##             {{ define overwrite setting here applied to all implicit groups }}
+  ##
+  ##           overwrites_group:
+  ##             <group_path>:
+  ##               {{ define overwrite setting here applied to a specific implicit group }}
+  ##
+  ##   projects:
+  ##     projects:
+  ##
+
+
+    ## this role supports vars.d
+  - include_role:
+      name: smabot.base.expand_vardirs
+
+
+  - smabot.git.normalize_gitlab_manage_groups_and_repos_cfg:
+    register: _tmp_normres
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+  - set_fact:
+      smabot_git_gitlab_manage_groups_and_repos_args_normed: >-
+        {{ _tmp_normres.normalized }}
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+
+  - name: set connection credentials when necessary
+    set_fact:
+      "{{ _iter_cred_vars.key }}": "{{ _iter_cred_vars.value }}"
+    loop: >-
+      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.connection._export_vars.ansible
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_cred_vars
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+
+  - include_tasks: handle_groups/main.yml
+
+
+## TODO: handle group members and basic management
+  - include_tasks: handle_projects/main.yml
+
+
+    ## as these vars might contain highly valuable secrets it is a good
+    ## idea to unset them after they are dont needed anymore
+  - name: unset connection credentials when necessary
+    set_fact:
+      "{{ _iter_cred_vars.key }}":
+    loop: >-
+      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.connection._export_vars.ansible
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_cred_vars
+      label: "{{ _iter_cred_vars.key }}"
+

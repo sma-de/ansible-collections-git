@@ -1,0 +1,21 @@
+---
+
+  - include_tasks: basics.yml
+    loop: >-
+      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.groups._export_lists.basic }}
+    loop_control:
+      loop_var: _iter_gitlab_grps
+      label: "{{ _iter_gitlab_grps.fullpath }}"
+
+
+    ##
+    ## as groups might be crossmembers between each other,
+    ## first ensure that all groups exists before doing memberships
+    ##
+  - include_tasks: memberships.yml
+    loop: >-
+      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.groups._export_lists.members }}
+    loop_control:
+      loop_var: _iter_gitlab_grps
+      label: "{{ _iter_gitlab_grps.fullpath }}"
+

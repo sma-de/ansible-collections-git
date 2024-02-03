@@ -22,6 +22,17 @@
     no_log: true
 
 
+    ##
+    ## optionally when defined add custom extra values to secret to create
+    ##
+  - set_fact:
+      _tmp_secrets_map: >-
+        {{ _tmp_secrets_map
+         | combine(_iter_secret_stores.parameters.extra_values) }}
+    no_log: true
+    when: _iter_secret_stores.parameters.extra_values is truthy
+
+
   - set_fact:
       _tmp_user_secrets: >-
         {{ _tmp_user_secrets | combine({

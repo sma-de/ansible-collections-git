@@ -1,0 +1,6 @@
+---
+
+  - name: add/change/remove group members
+    smabot.git.gitlab_group_members_ext: >-
+      {{ _iter_gitlab_grps.members.config }}
+

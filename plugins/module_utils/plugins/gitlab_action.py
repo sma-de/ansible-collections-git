@@ -3,7 +3,10 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 
-##from ansible.errors import AnsibleOptionsError, AnsibleModuleError##, AnsibleError
+from ansible.errors import \
+  AnsibleAssertionError,\
+  AnsibleError
+
 ####from ansible.module_utils._text import to_native
 from ansible.module_utils.six import iteritems, string_types
 
@@ -15,6 +18,29 @@ from ansible.utils.display import Display
 
 
 display = Display()
+
+
+def get_gitlab_rolemapping(invert=False):
+  import gitlab
+
+  res = {
+    'guest': gitlab.const.AccessLevel.GUEST,
+    'reporter': gitlab.const.AccessLevel.REPORTER,
+    'developer': gitlab.const.AccessLevel.DEVELOPER,
+    'maintainer': gitlab.const.AccessLevel.MAINTAINER,
+    'owner': gitlab.const.AccessLevel.OWNER,
+  }
+
+  if not invert:
+    return res
+
+  ## switch keys and values
+  new_res = {}
+
+  for k, v in res.items():
+      new_res[v] = k
+
+  return new_res
 
 
 class GitlabBase(BaseAction):
@@ -91,6 +117,68 @@ class GitlabBase(BaseAction):
     @property
     def gitlab_client(self):
         return self.get_server_client()
+
+
+    def get_group_by_id(self, gid, non_exist_okay=False):
+        try:
+            ## case 1: given gid is numerical gitlab
+            ##   object id for group, so we can do direct access here
+            gid = int(gid)
+            return self.gitlab_client.groups.get(gid)
+        except ValueError:
+            pass
+
+        ## case 2: assume gid is string containing
+        ##   fullpath for group, use it to find group
+        display.vv(
+           "GitLabBase(get_group_by_id) :: search for group by"\
+           " its fullpath '{}' ...".format(gid)
+        )
+
+        for g in self.gitlab_client.groups.list(iterator=True):
+            ##display.vvv(
+            ##   "GitLabBase(get_group_by_id) :: examine"\
+            ##   " server group: {}".format(g)
+            ##)
+
+            if g.full_path == gid:
+                display.vv(
+                   "GitlabBase(get_group_by_id) :: found group on"\
+                   " server matching fullpath '{}'".format(gid)
+                )
+
+                ##
+                ## note: object returned by list is not necessary as
+                ##   complete as a direct group get, so instead of
+                ##   returning it directly use it only to get group
+                ##   id and return then the result of explicit get call
+                ##
+                return self.gitlab_client.groups.get(g.id)
+
+        if non_exist_okay:
+            return None
+
+        raise AnsibleError(
+          "could not find a gitlab group matching fullpath '{}'".format(gid)
+        )
+
+
+    def get_shared_groups(self, group):
+        if isinstance(group, string_types + (int,)):
+            group = self.get_group_by_id(group)
+
+        ## otherwise assume group is already a proper gitlab group object
+
+        ## make shared groups avaible as mapping instead of default list
+        ## which makes working with it easier
+        res = {}
+
+        for x in group.shared_with_groups:
+            res[int(x['group_id'])] = x
+            res[x['group_id']] = x
+            res[x['group_full_path']] = x
+
+        return res
 
 
     def get_server_client(self, re_auth=False, **kwargs):
@@ -180,14 +268,14 @@ class GitlabUserBase(GitlabBase):
                 if non_exist_okay:
                     return None
 
-                return AnsibleError(
+                raise AnsibleError(
                   "Could not find a gitlab user named '{}'".format(usrname)
                 )
 
             if len(tmp) > 1: 
-                return AnsibleAssertionError(
+                raise AnsibleAssertionError(
                   "Found more than one user matching given" \
-                  " name '{}'".fromat(usrname)
+                  " name '{}'".format(usrname)
                 )
 
             self._glusr = tmp[0]

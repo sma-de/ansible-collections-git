@@ -1,0 +1,16 @@
+---
+
+## TODO
+##  - include_tasks: basics.yml
+##    loop: >-
+##      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.projects._export_lists.basic }}
+##    loop_control:
+##      loop_var: _iter_gitlab_projects
+
+
+  - include_tasks: memberships.yml
+    loop: >-
+      {{ smabot_git_gitlab_manage_groups_and_repos_args_normed.projects._export_lists.members }}
+    loop_control:
+      loop_var: _iter_gitlab_projects
+

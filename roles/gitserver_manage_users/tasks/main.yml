@@ -9,7 +9,7 @@
     register: _tmp_normres
 
     ## might contain confidential server credentials and user secrets
-    no_log: true
+    ##no_log: true
 
   - set_fact:
       smabot_git_gitserver_manage_users_args_normed: "{{ _tmp_normres.normalized }}"
@@ -41,6 +41,47 @@
       {{ smabot_git_gitserver_manage_users_args_normed.users | dict2items() }}
     loop_control:
       loop_var: _iter_gitsrv_users
+      label: "{{ _iter_gitsrv_users.key }}"
+
+
+    ## when necessary, write back user secrets to secret stores
+  - include_tasks: secret_stores/handle_storing/main.yml
+    loop: >-
+      {{ _tmp_user_secrets | dict2items() | map(attribute='value') }}
+    loop_control:
+      loop_var: _iter_secret_stores
+
+      ##
+      ## note: important to use label here, because on default
+      ##   the complete map is printed to log with all its
+      ##   secrets inside!!
+      ##
+      ## see also: https://serverfault.com/q/1059530
+      ##
+      label: "{{ _iter_secret_stores.name }}"
+
+
+    ## ensure temporary secret collecting var is cleaned
+    ## after it is not needed anymore
+  - name: clear internal tmp variables
+    set_fact:
+      _tmp_user_secrets:
+
+
+    ##
+    ## note: split user handling into multiple parts, and
+    ##   do only the minimal needed in the first part which
+    ##   handles secrets and secret updates to minimize the
+    ##   time credential store contains outdated secrets or
+    ##   updated secrets are not written back to cred store
+    ##   at all because of some other step failing
+    ##
+  - include_tasks: handle_user_post_secrets.yml
+    loop: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.users | dict2items() }}
+    loop_control:
+      loop_var: _iter_gitsrv_users
+      label: "{{ _iter_gitsrv_users.key }}"
 
 
     ## as these vars might contain highly valuable secrets it is a good
@@ -53,19 +94,5 @@
        | dict2items() }}
     loop_control:
       loop_var: _iter_cred_vars
-
-
-  ## when necessary, write back user secrets to secret stores
-  - include_tasks: secret_stores/handle_storing/main.yml
-    loop: >-
-      {{ _tmp_user_secrets | dict2items() | map(attribute='value') }}
-    loop_control:
-      loop_var: _iter_secret_stores
-
-
-  ## ensure temporary secret collecting var is cleaned
-  ## after it is not needed anymore
-  - name: clear internal tmp variables
-    set_fact:
-      _tmp_user_secrets:
+      label: "{{ _iter_cred_vars.key }}"
 

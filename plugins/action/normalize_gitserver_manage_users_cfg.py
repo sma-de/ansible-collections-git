@@ -16,6 +16,10 @@ from ansible_collections.smabot.base.plugins.module_utils.utils.dicting import \
   setdefault_none, \
   SUBDICT_METAKEY_ANY
 
+from ansible_collections.smabot.git.plugins.module_utils.plugins.config_normalizing.gitserver_norm_base import \
+  GitServerBaseNormer,\
+  SafeDict
+
 from ansible_collections.smabot.base.plugins.module_utils.utils.utils import ansible_assert
 
 from ansible.utils.display import Display
@@ -24,120 +28,16 @@ from ansible.utils.display import Display
 display = Display()
 
 
-class SafeDict(dict):
-    def __missing__(self, key):
-        return '{' + key + '}'
-
-
-class ConfigRootNormalizer(NormalizerBase):
+class ConfigRootNormalizer(GitServerBaseNormer):
 
     def __init__(self, pluginref, *args, **kwargs):
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
-          ConnectionNormalizer(pluginref),
           UserInstNormer(pluginref),
         ]
 
         super(ConfigRootNormalizer, self).__init__(pluginref, *args, **kwargs)
 
-
-class ConnectionNormalizer(NormalizerBase):
-
-    def __init__(self, pluginref, *args, **kwargs):
-        ##subnorms = kwargs.setdefault('sub_normalizers', [])
-        ##subnorms += [
-        ##  ServerInstancesNormalizer(pluginref),
-        ##]
-
-        super(ConnectionNormalizer, self).__init__(
-           pluginref, *args, **kwargs
-        )
-
-    @property
-    def config_path(self):
-        return ['connection']
-
-
-    ## TODO: support env vars???
-    def _handle_server_var(self, var, srvtype, basemap,
-        mapkey, publish_ansvars, optional=False,
-    ):
-        ## check if cfgmap has an explicit value set, if so prefer that
-        val = basemap.get(mapkey, None)
-
-        ## as we got the value from cfgmap we must create corresponding ansvars
-        setvars = True
-
-        test_vars = [
-          var + '_' + srvtype,
-        ]
-
-        if not val:
-            ## 2nd source: server specific var
-            val = self.pluginref.get_ansible_var(test_vars[-1], None)
-
-            ## connection credentials are already avaible as most specific
-            ## variables, dont recreate them, it would not really hurt,
-            ## but security wise it gives a little more theoretically
-            ## exposure to confidential data than necessary, so dont do it
-            setvars = False
-
-            if not val:
-                ## final fallback source: server agnostic general var
-                test_vars.append(var)
-                val = self.pluginref.get_ansible_var(test_vars[-1], None)
-
-                ansible_assert(val or optional,\
-                   "mandatory connection attribute '{}' not found, set"\
-                   " it either directly in cfgmap or by using one of"\
-                   " these ansible variables: {}".format(mapkey, test_vars)
-                )
-
-        if val and setvars:
-            for x in test_vars:
-                publish_ansvars[x] = val
-
-
-    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-        pcfg = self.get_parentcfg(cfg, cfgpath_abs)
-        srvtype = my_subcfg['type']
-
-        pcfg['server_type'] = srvtype
-
-        ##
-        ## note: internally we handle connection credentials by ansible
-        ##   vars which might or might not yet be set, normalize this here
-        ##
-        publish_ansvars = {}
-
-        tmp = [
-          ('url', 'auth_gitserver_url', False),
-          ('validate_certs', 'auth_gitserver_valcerts', True),
-        ]
-
-        for mk, avar, opt in tmp:
-            self._handle_server_var(avar, srvtype,
-              my_subcfg, mk, publish_ansvars, opt
-            )
-
-        auth = setdefault_none(my_subcfg, 'auth', {})
-
-        tmp = [
-          ('token', 'auth_gitserver_token', True),
-          ('username', 'auth_gitserver_user', True),
-          ('password', 'auth_gitserver_pw', True),
-        ]
-
-        for mk, avar, opt in tmp:
-            self._handle_server_var(avar, srvtype,
-              auth, mk, publish_ansvars, opt
-            )
-
-        my_subcfg['_export_vars'] = {
-          'ansible': publish_ansvars,
-        }
-
-        return my_subcfg
 
 
 class UserInstNormer(NormalizerNamed):
@@ -156,6 +56,7 @@ class UserInstNormer(NormalizerNamed):
           UserCredsDefaults_Normer(pluginref),
           UserPW_Normer(pluginref),
           UserSshKey_Normer(pluginref),
+          UserMembershipsNormer(pluginref),
         ]
 
         super(UserInstNormer, self).__init__(
@@ -175,6 +76,7 @@ class UserInstNormer(NormalizerNamed):
     def _handle_specifics_presub_gitlab(self, cfg, my_subcfg, cfgpath_abs):
         mail_needed = True
         un = my_subcfg['username']
+        scfg_um = my_subcfg['_export_configs']['user_manage']
 
         if my_subcfg['user_type'] == 'service_account':
             ##
@@ -186,12 +88,31 @@ class UserInstNormer(NormalizerNamed):
                password={'disabled': True}
             )
 
+            ##
+            ## on default make bot users maximal restricted
+            ## by also applying the external flag
+            ##
+            setdefault_none(scfg_um, 'external', True)
+
         em = my_subcfg.get('email', None)
         fmt_mail = None
 
         if em:
             setdefault_none(em, 'user', un)
             setdefault_none(em, 'format', '{user}@{domain}')
+
+            ##
+            ## optionally support normalisation of email parts
+            ## by a simple pattern-replacement mapping
+            ##
+            n = setdefault_none(em, 'norming', {})
+            for k, v in n.items():
+                nv = em[k]
+
+                for pat, repl in v.items():
+                    nv = nv.replace(pat, repl)
+
+                em[k] = nv
 
             fmt_mail = em['format'].format(**em)
 
@@ -201,8 +122,6 @@ class UserInstNormer(NormalizerNamed):
                 "providing a mail address for user '{}' is mandatory,"\
                 " so you must at least specify a domain".format(un)
             )
-
-        scfg_um = my_subcfg['_export_configs']['user_manage']
 
         ##
         ## note: in gitlab api the attribute "name" is used for the
@@ -243,6 +162,294 @@ class UserInstNormer(NormalizerNamed):
         return my_subcfg
 
 
+
+class UserMembershipsNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs, 
+          'exclusive', DefaultSetterConstant(False)
+        )
+
+        self._add_defaultsetter(kwargs, 
+          'enable', DefaultSetterConstant(None)
+        )
+
+        self._add_defaultsetter(kwargs, 
+          'default_role', DefaultSetterConstant(None)
+        )
+
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          (IdentityGroupNormer, True),
+          UserMembershipsTargetInstNormer(pluginref),
+          UserMembershipsExclusiveNormer(pluginref),
+        ]
+
+        super(UserMembershipsNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['memberships']
+
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        ena = my_subcfg['enable']
+
+        if ena is None:
+            ## default enable depending on other settings
+            ena = my_subcfg['exclusive']\
+                or bool(my_subcfg.get('identity_group', None))\
+                or bool(my_subcfg.get('targets', None))
+
+            my_subcfg['enable'] = ena
+
+        if not ena:
+            return my_subcfg
+
+        return my_subcfg
+
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        ##
+        ## combine all target config parts to single common config
+        ##
+
+        upcfg = {
+          'groups': {'groups': {}},
+          'projects': {'projects': {}},
+        }
+
+        for k in list(my_subcfg['targets'].keys()):
+            v = my_subcfg['targets'][k]
+
+            if not v:
+                ##
+                ## ignore and remove disabled targets
+                ##
+                my_subcfg['targets'].pop(k)
+                continue
+
+            uptype = next(iter(v['_upstream_cfg']))
+            upcfg[uptype][uptype].update(v['_upstream_cfg'][uptype])
+
+        if not upcfg['groups']['groups']:
+            upcfg.pop('groups')
+
+        if not upcfg['projects']['projects']:
+            upcfg.pop('projects')
+
+        if upcfg:
+            my_subcfg['_upstream_cfg_create_memberships'] = upcfg
+
+        return my_subcfg
+
+
+
+class UserMembershipsExclusiveNormer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs, 
+          'enable', DefaultSetterConstant(True)
+        )
+
+        super(UserMembershipsExclusiveNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['exclusive']
+
+    @property
+    def simpleform_key(self):
+        return 'enable'
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        if not my_subcfg['enable']:
+            return my_subcfg
+
+        cfgs = setdefault_none(my_subcfg, 'configs', {})
+        ucfg = setdefault_none(cfgs, 'user', {})
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=2)
+
+        ucfg['username'] = pcfg['username']
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs)
+
+        idgroup = pcfg.get('identity_group', None)
+
+        if idgroup:
+            ##
+            ## if we have an identity group defined and
+            ## have exclusive mode set, means that the user
+            ## itself is only allowed to be a direct member
+            ## in id-group, every other membership should
+            ## be handled by id-group
+            ##
+            ucfg['ignores'] = [idgroup['full_path']]
+        else:
+            ##
+            ## in setups without id-groups user membership is
+            ## obviously okay for every explicitly defined target
+            ##
+            ucfg['ignores'] = []
+
+            for k, v in pcfg['targets'].items():
+                ucfg['ignores'].append(v['full_path'])
+
+        gcfg = setdefault_none(cfgs, 'groups', {})
+
+        if idgroup:
+            gcfg['group_id'] = idgroup['full_path']
+            gcfg['inverted'] = True
+            gcfg['ignores'] = []
+
+            for k, v in pcfg['targets'].items():
+                if not v:
+                    ## ignore disabled targets
+                    continue
+
+                if v['full_path'] == idgroup['full_path']:
+                    continue
+
+                gcfg['ignores'].append(v['full_path'])
+
+        return my_subcfg
+
+
+
+class IdentityGroupNormer(NormalizerBase):
+
+    NORMER_CONFIG_PATH = ['identity_group']
+
+    @property
+    def config_path(self):
+        return self.NORMER_CONFIG_PATH
+
+    @property
+    def simpleform_key(self):
+        return 'full_path'
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        fp = my_subcfg['full_path']
+
+        ## template variables inside fullpath
+
+        ## collect variables
+        templ_vars = {}
+
+        ## add templatable user attributes
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=2)
+
+        for x in ['username']:
+            templ_vars[x] = pcfg[x]
+
+        fp = fp.format(**templ_vars)
+
+        my_subcfg['full_path'] = fp
+        my_subcfg['type'] = 'group'
+        my_subcfg['identity_group'] = True
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs)
+        targets = setdefault_none(pcfg, 'targets', {})
+
+        targets[fp] = my_subcfg
+        return my_subcfg
+
+
+
+class UserMembershipsTargetInstNormer(NormalizerNamed):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs, 
+          'identity_group', DefaultSetterConstant(False)
+        )
+
+        super(UserMembershipsTargetInstNormer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['targets', SUBDICT_METAKEY_ANY]
+
+    @property
+    def name_key(self):
+        return 'full_path'
+
+    @property
+    def simpleform_key(self):
+        return 'role'
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        fp = my_subcfg['full_path']
+        deftype = 'project'
+
+        if fp[-1] == '/':
+            fp = fp[:-1]
+            my_subcfg['full_path'] = fp
+            deftype = 'group'
+
+        setdefault_none(my_subcfg, 'type', deftype)
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=2)
+
+        identgrp = pcfg.get('identity_group', None)
+        is_identgrp = my_subcfg['identity_group']
+
+        ## build upstream config for upstream module
+        ## handling membership settings
+        c = setdefault_none(my_subcfg, 'config', {})
+
+        ##
+        ## on default dont manage stuff like creating
+        ## or modifying group/project itself, only its members
+        ##
+        tmp = setdefault_none(c, 'basic_management', {})
+        setdefault_none(tmp, 'enable', is_identgrp)
+
+        ##
+        ## on default disable basic management for all implicit base groups
+        ##
+        grpgen = setdefault_none(c, 'grpgen', {})
+        setdefault_none(setdefault_none(grpgen, 'overwrites_all', {}),
+           'basic_management', False
+        )
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=2)
+
+        tmp = {
+          'default_role': pcfg['default_role'],
+        }
+
+        if not identgrp or is_identgrp:
+
+            pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=3)
+            tmp['users'] = {
+              'members': {pcfg['username']: my_subcfg.get('role', None)}
+            }
+
+        else:
+
+            tmp['groups'] = {
+              'members': {identgrp['full_path']: my_subcfg.get('role', None)}
+            }
+
+        c['members'] = tmp
+
+        my_subcfg['_upstream_cfg'] = {
+           (my_subcfg['type'] + 's'): {
+              fp: c,
+           },
+        }
+
+        return my_subcfg
+
+
+
 class CredentialSettingsNormerBase(NormalizerBase):
 
     def __init__(self, pluginref, *args, **kwargs):
@@ -268,6 +475,15 @@ class CredentialSettingsNormerBase(NormalizerBase):
         return True
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        if self.default_settings_distance:
+            pcfg = self.get_parentcfg(cfg, cfgpath_abs,
+              level=self.default_settings_distance
+            )
+
+            my_subcfg = merge_dicts(copy.deepcopy(
+               pcfg['default_settings']), my_subcfg
+            )
+
         ac = my_subcfg.get('auto_create', None)
         value = None
 
@@ -283,6 +499,8 @@ class CredentialSettingsNormerBase(NormalizerBase):
             ## assume simple bool
             ac = {'enabled': ac}
 
+        setdefault_none(ac, 'enabled', True)
+
         ansible_assert(value or ac['enabled'],
            "bad user definition: credential must either have"\
            " an explicit value set or 'auto_create' must be active"
@@ -294,20 +512,8 @@ class CredentialSettingsNormerBase(NormalizerBase):
            " both at the same time"
         )
 
-        ## TODO: make this true ultimatively
-        setdefault_none(ac, 'cycle', False)
-
+        setdefault_none(ac, 'cycle', True)
         my_subcfg['auto_create'] = ac
-
-        if self.default_settings_distance:
-            pcfg = self.get_parentcfg(cfg, cfgpath_abs,
-              level=self.default_settings_distance
-            )
-
-            my_subcfg = merge_dicts(copy.deepcopy(
-               pcfg['default_settings']), my_subcfg
-            )
-
         return my_subcfg
 
 
@@ -324,6 +530,15 @@ class CredentialSettingsNormerBase(NormalizerBase):
         ## optionally change store keynames based on credential
         ## specific meta information
         knames = store_map['parameters']['key_names']
+
+        if self.has_value:
+            ##
+            ## optionally if credential has optional extra_values
+            ## default there credstore keyname by their cfg keynames
+            ##
+            for k in my_subcfg.get('extra_values', {}):
+                knames[k] = k
+
         for k in knames:
             repl = SafeDict()
             repl.update(**self._get_store_keynames_replacements(
@@ -333,6 +548,14 @@ class CredentialSettingsNormerBase(NormalizerBase):
             v = knames[k].format_map(repl)
 
             knames[k] = v
+
+        if self.has_value:
+            credstore_extra_vals = {}
+
+            for k, v in my_subcfg.get('extra_values', {}).items():
+                credstore_extra_vals[knames[k]] = v
+
+            store_map['parameters']['extra_values'] = credstore_extra_vals
 
 
     def _postsub_mod_credstore_hashivault(self, cfg, my_subcfg, cfgpath_abs,
@@ -391,16 +614,6 @@ class CredentialSettingsNormerBase(NormalizerBase):
 
 
 class UserCredsDefaults_Normer(CredentialSettingsNormerBase):
-
-    def __init__(self, pluginref, *args, **kwargs):
-        ##subnorms = kwargs.setdefault('sub_normalizers', [])
-        ##subnorms += [
-        ##  SrvInstNormalizer(pluginref),
-        ##]
-
-        super(UserCredsDefaults_Normer, self).__init__(
-           pluginref, *args, **kwargs
-        )
 
     @property
     def config_path(self):
@@ -490,20 +703,6 @@ class CredentialStoreInstNormer(NormalizerNamed):
 
 class UserPW_Normer(CredentialSettingsNormerBase):
 
-    def __init__(self, pluginref, *args, **kwargs):
-        ## self._add_defaultsetter(kwargs, 
-        ##   'type', DefaultSetterConstant('standard')
-        ## )
-
-        ## ##subnorms = kwargs.setdefault('sub_normalizers', [])
-        ## ##subnorms += [
-        ## ##  SrvInstNormalizer(pluginref),
-        ## ##]
-
-        super(UserPW_Normer, self).__init__(
-           pluginref, *args, **kwargs
-        )
-
     @property
     def default_settings_distance(self):
         return 1
@@ -527,20 +726,6 @@ class UserPW_Normer(CredentialSettingsNormerBase):
 
 
 class UserSshKey_Normer(CredentialSettingsNormerBase):
-
-    def __init__(self, pluginref, *args, **kwargs):
-        ## self._add_defaultsetter(kwargs, 
-        ##   'type', DefaultSetterConstant('standard')
-        ## )
-
-        ## ##subnorms = kwargs.setdefault('sub_normalizers', [])
-        ## ##subnorms += [
-        ## ##  SrvInstNormalizer(pluginref),
-        ## ##]
-
-        super(UserSshKey_Normer, self).__init__(
-           pluginref, *args, **kwargs
-        )
 
     @property
     def default_settings_distance(self):
@@ -578,267 +763,17 @@ class UserSshKey_Normer(CredentialSettingsNormerBase):
         return my_subcfg
 
 
-## class SrvInstNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           ServerUsersNormalizer(pluginref),
-##           SrvRolesNormalizer(pluginref),
-##         ]
-## 
-##         super(SrvInstNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return [SUBDICT_METAKEY_ANY]
-## 
-## 
-## class SrvRolesBaseNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           SrvRolesMembersNormalizer(pluginref),
-## 
-##           ## note: for recursive structures, the sub normalizers can only 
-##           ##   be instantiated if the corresponding key actually exists 
-##           ##   to avoid indefinite recursions of death
-##           (SrvSubRolesNormalizer, True),
-##         ]
-## 
-##         super(SrvRolesBaseNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-##         # do config subkey
-##         c = setdefault_none(my_subcfg, 'config', defval={})
-##         setdefault_none(c, 'name', defval=cfgpath_abs[-1])
-## 
-##         # build role hierarchy path and parent
-##         if cfgpath_abs[-1] == 'roles':
-##             ## top level
-##             parent = []
-##         else:
-##             ## subrole
-##             parent = get_subdict(cfg, cfgpath_abs[:-2])
-##             parent = parent['role_abspath']
-## 
-##         my_subcfg['role_abspath'] = parent + [c['name']]
-##         c['parent'] = '/'.join(parent)
-## 
-##         return my_subcfg
-## 
-## 
-## class SrvRolesNormalizer(SrvRolesBaseNormalizer):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(SrvRolesNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return ['roles']
-## 
-## 
-## class SrvSubRolesNormalizer(NormalizerBase):
-## 
-##     NORMER_CONFIG_PATH = ['subroles']
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           SrvRoleInstNormalizer(pluginref),
-##         ]
-## 
-##         super(SrvSubRolesNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return type(self).NORMER_CONFIG_PATH
-## 
-## 
-## class SrvRoleInstNormalizer(SrvRolesBaseNormalizer):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(SrvRoleInstNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return [SUBDICT_METAKEY_ANY]
-## 
-## 
-## class SrvRolesMembersNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(SrvRolesMembersNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return ['members']
-## 
-##     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-##         if not my_subcfg:
-##             return my_subcfg
-## 
-##         ## if it exists, members should be a dict where the keys are 
-##         ## valid gitlab access levels (like guest or developer) and 
-##         ## the values should be a list of users
-##         exportcfg = []
-##         my_group = self.get_parentcfg(cfg, cfgpath_abs)
-##         my_group = '/'.join(my_group['role_abspath'])
-## 
-##         for (k,ul) in iteritems(my_subcfg):
-##             for u in ul:
-##                 exportcfg.append({
-##                   'gitlab_group': my_group, 'gitlab_user': u, 'access_level': k
-##                 })
-## 
-##         my_subcfg['_exportcfg'] = exportcfg
-## 
-##         return my_subcfg
-## 
-## 
-## class ServerUsersNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           ServerBotsNormalizer(pluginref),
-##           ServerHumansNormalizer(pluginref),
-##         ]
-## 
-##         super(ServerUsersNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return ['users']
-## 
-## 
-## class ServerUsrBaseNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           SrvUsrNormalizer(pluginref),
-##         ]
-## 
-##         super(ServerUsrBaseNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-## 
-## class ServerBotsNormalizer(ServerUsrBaseNormalizer):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(ServerBotsNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return ['bots']
-## 
-## 
-## class ServerHumansNormalizer(ServerUsrBaseNormalizer):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(ServerHumansNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return ['humans']
-## 
-## 
-## class SrvUsrNormalizer(NormalizerBase):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         subnorms = kwargs.setdefault('sub_normalizers', [])
-##         subnorms += [
-##           SrvUsrCfgNormalizer(pluginref),
-##         ]
-## 
-##         self._add_defaultsetter(kwargs, 
-##            'pw_access', DefaultSetterConstant(True)
-##         )
-## 
-##         super(SrvUsrNormalizer, self).__init__(
-##            pluginref, *args, **kwargs
-##         )
-## 
-##     @property
-##     def config_path(self):
-##         return [SUBDICT_METAKEY_ANY]
-## 
-##     def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
-##         usr_roles = my_subcfg.get('roles', None)
-## 
-##         if usr_roles:
-##             for ur in usr_roles:
-##                 user_role_to_cfg(my_subcfg['config']['username'], ur, 
-##                   self.get_parentcfg(cfg, cfgpath_abs, level=3)
-##                 )
-## 
-##         return my_subcfg
-## 
-## 
-## class SrvUsrCfgNormalizer(NormalizerNamed):
-## 
-##     def __init__(self, pluginref, *args, **kwargs):
-##         super(SrvUsrCfgNormalizer, self).__init__(
-##            pluginref, *args, mapkey_lvl=-2, **kwargs
-##         )
-## 
-##         self.default_setters['name'] = DefaultSetterOtherKey('username')
-## 
-##     @property
-##     def config_path(self):
-##         return ['config']
-## 
-##     @property
-##     def name_key(self):
-##         return 'username'
-## 
-##     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-##         mail = my_subcfg.get('email', None)
-## 
-##         if not mail:
-##             # if not mail address is explicitly given, check if mail 
-##             # template is specified for server, if so use this to 
-##             # create address with username as param
-##             tmp = self.get_parentcfg(
-##                 cfg, cfgpath_abs, level=3
-##             ).get('mail_template', None)
-## 
-##             if tmp:
-##                 my_subcfg['email'] = tmp.format(
-##                    my_subcfg['username'].replace('_', '-')
-##                 )
-## 
-##         return my_subcfg
-
-
 
 class ActionModule(ConfigNormalizerBaseMerger):
 
     def __init__(self, *args, **kwargs):
-        super(ActionModule, self).__init__(ConfigRootNormalizer(self), 
-            *args, ##default_merge_vars=['gitlab_cfg_defaults'], 
-            ##extra_merge_vars_ans=['extra_gitlab_config_maps'], 
+        super(ActionModule, self).__init__(ConfigRootNormalizer(self), *args,
+            default_merge_vars=[
+               'smabot_git_gitserver_manage_users_args_defaults'
+            ],
+            extra_merge_vars_ans=[
+               'extra_smabot_git_gitserver_manage_users_args_config_maps'
+            ],
             **kwargs
         )
 

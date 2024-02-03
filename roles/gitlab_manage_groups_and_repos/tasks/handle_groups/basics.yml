@@ -1,0 +1,9 @@
+---
+
+  - name: >-
+      create/update/remove gitlab group ==>>
+      {{ _iter_gitlab_grps.fullpath }}
+    smabot.git.gitlab_modwrap:
+      modname: community.general.gitlab_group
+      modargs: "{{ _iter_gitlab_grps.basic_management.configs.grp_create }}"
+

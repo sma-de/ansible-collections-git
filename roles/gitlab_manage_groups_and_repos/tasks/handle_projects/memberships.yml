@@ -1,0 +1,14 @@
+---
+
+##    ##
+##    ## TODO: create extended module which can handle group members
+##    ##
+##  - name: add/change/remove project members
+##    smabot.git.gitlab_group_members_ext: >-
+##      {{ _iter_gitlab_projects.members.config }}
+
+  - name: add/change/remove project members
+    smabot.git.gitlab_modwrap:
+      modname: community.general.gitlab_project_members
+      modargs: "{{ _iter_gitlab_projects.members.config }}"
+

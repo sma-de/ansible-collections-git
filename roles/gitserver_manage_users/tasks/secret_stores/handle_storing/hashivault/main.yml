@@ -5,7 +5,7 @@
     set_fact:
       smabot_hashivault_readwrite_secrets_args: >-
         {{ _iter_secret_stores | smabot.git.to_hashivault_cfg(write=True) }}
-     no_log: true
+    no_log: true
 
 
   - ansible.builtin.include_role:

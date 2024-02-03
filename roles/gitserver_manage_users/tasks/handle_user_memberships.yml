@@ -1,0 +1,5 @@
+---
+
+  - include_tasks: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.server_type }}/handle_user_memberships.yml
+

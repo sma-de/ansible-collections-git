@@ -1,0 +1,138 @@
+---
+
+##  - set_fact:
+##      smabot_git_gitlab_manage_groups_and_repos_args:
+##        connection:
+##
+##           ## url or url components subdict
+##           url: >-
+##             {{ lookup('ansible.builtin.env', 'CI_SERVER_URL') }}
+##
+##
+##        groups:
+##          groups:
+##  
+##            anstest_grpgen:
+##              ##path: ## defaults to mapkey
+##              ##name: ## defaults to path
+##              ##fullpath: ## always this grps path + the path of all its parents
+##  
+##              ##basic_management: ## creating or deleting group and managing some other core attributes
+##              ##  enable: true/false ## enable or disable 
+##  
+##              members:
+##                ##enable: true/false ## enable or completly disable members handling for this group
+##                ##enable: true
+##                default_role: developer
+##              ##default_role: maintainer
+##              ##  users:
+##              ##    default_role:
+##              ##    exclusive: ## defaults to false
+##              ##    users:
+##              ##      <user-a>: <role-mapping>
+##              ##      <user-a>:
+##              ##         username: ## defaults to mapkey
+##              ##         role: ## defaults to default role
+##                groups:
+##              ##    default_role:
+##              ##exclusive: true ## defaults to false
+##                  members:
+##                    anstest_bar_key:
+##                      id: anstest_bar
+##                    ##anstest_bar/boo/baz:
+##                    ##  role: inherit
+##  
+##            anstest_bar/boo/baz:  ##<-- can specify "deep" subgrp directly, in that case parents are auto generated
+##              ##path: ## defaults to mapkey
+##  
+##            ## alternative other explicit method to define group trees
+##            anstest_bar:
+##              ##path: ## defaults to mapkey
+##              subgroups:
+##                baz:
+##                  subgroups:
+##                    foo:
+##  
+##            ## bar/boo/baz:
+##  
+##            ##   ##
+##            ##   ## grpgen describes how options for implicit parent
+##            ##   ## groups or explicit child groups should be set,
+##            ##   ## for explicit child groups you can obviously overwrite any
+##            ##   ## settings explicitly by setting in the child definition verbatim
+##            ##   ##
+##            ##   grpgen:
+##  
+##            ##     ## for defaulting implicit groups get the standard
+##            ##     ## normalizer defaults values set, not more not less,
+##            ##     ## defaulting method is actually also the default
+##            ##     ## when unspecified
+##            ##     base_method: defaulting
+##  
+##            ##     ## inherting implicit groups "inherit" the config options set for the explicit base group
+##            ##     base_method: inheriting
+##  
+##            ##     overwrites_all:
+##            ##       {{ define overwrite setting here applied to all implicit groups }}
+##  
+##            ##     overwrites_group:
+##            ##       <group_path>:
+##            ##         {{ define overwrite setting here applied to a specific implicit group }}
+
+  - block:
+
+      - set_fact:
+          _tmp_bad_group_sharings:
+
+        ##
+        ## get "illegal" user memberships
+        ##
+      - name: find "illegal" user memberships
+        smabot.git.gitlab_get_user_memberships: >-
+          {{ _iter_gitsrv_users.value.memberships.exclusive.configs.user }}
+        register: _tmp_bad_user_memships
+
+        ##
+        ## in identity group mode also get "illegal" id-group sharings
+        ##
+      - name: find "illegal" group sharings
+        smabot.git.gitlab_get_group_sharings: >-
+          {{ _iter_gitsrv_users.value.memberships.exclusive.configs.groups }}
+        register: _tmp_bad_group_sharings
+        when: _iter_gitsrv_users.value.memberships.exclusive.configs.groups is truthy
+
+        ##
+        ## build a second absenting call to upstream module
+        ## removing all illegal memberships
+        ##
+      - block:
+
+          - set_fact:
+              "{{ _iter_memabsent_vars.key }}": "{{ _iter_memabsent_vars.value }}"
+            loop: >-
+              {{ { 'user_memberships': _tmp_bad_user_memships,
+                   'group_sharings': _tmp_bad_group_sharings }
+                 | smabot.git.to_illegal_memberships_absenting_cfg
+                 | dict2items }}
+            loop_control:
+              loop_var: _iter_memabsent_vars
+
+          - name: remove "illegal" memberships because of exclusive mode
+            include_role:
+              name: smabot.git.gitlab_manage_groups_and_repos
+
+        when: >-
+          _tmp_bad_user_memships.memberships is truthy
+          or _tmp_bad_group_sharings.group_sharings is truthy
+
+    when: _iter_gitsrv_users.value.memberships.exclusive.enable
+
+
+  - set_fact:
+      smabot_git_gitlab_manage_groups_and_repos_args: >-
+        {{ _iter_gitsrv_users.value.memberships._upstream_cfg_create_memberships }}
+
+  - name: handle git user memberships (gitlab)
+    include_role: 
+      name: smabot.git.gitlab_manage_groups_and_repos
+

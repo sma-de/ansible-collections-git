@@ -22,6 +22,10 @@ from ansible_collections.smabot.base.plugins.module_utils.utils.dicting import \
   merge_dicts, \
   setdefault_none
 
+from ansible.utils.display import Display
+
+
+display = Display()
 
 
 ##
@@ -137,6 +141,79 @@ class ConvertHashiVaultCfgFilter(FilterBase):
 
 
 
+class ConvertIllegalMembershipsAbsentingCfgFilter(FilterBase):
+
+    FILTER_ID = 'to_illegal_memberships_absenting_cfg'
+
+
+    def _handle_memships_basic(self, srcmap, resmaps,
+       mship_basekey=None, memtype=None, srcmap_idkey=None,
+       get_subtype_fn=None,
+    ):
+        if not srcmap or not srcmap.get(mship_basekey, None):
+            return  ## noop
+
+        rmap_x = resmaps['smabot_git_gitlab_manage_groups_and_repos_args']
+
+        for k, v in srcmap[mship_basekey].items():
+            stype = get_subtype_fn(v)
+
+            rx = setdefault_none(rmap_x, stype, {})
+            rx = setdefault_none(rx, stype, {})
+
+            rx = setdefault_none(rx, v['full_path'], {
+              "basic_management": {
+                 "enable": False,
+              },
+
+              "grpgen": {
+                 "base_method": 'inheriting',
+              }
+            })
+
+            rx = setdefault_none(rx, 'members', {})
+
+            rxcfg = setdefault_none(rx, 'config', {})
+            rxcfg['state'] = 'absent'
+
+            rx = setdefault_none(rx, memtype, {})
+            rx = setdefault_none(rx, 'members', {})
+
+            rx[srcmap[srcmap_idkey]] = None
+
+
+    def _handle_user_memberships(self, indict, resmaps):
+        self._handle_memships_basic(indict.get('user_memberships', None),
+           resmaps, mship_basekey='memberships', memtype='users',
+           srcmap_idkey='username', get_subtype_fn=lambda v: v['type'] + 's',
+        )
+
+
+    def _handle_group_sharings(self, indict, resmaps):
+        self._handle_memships_basic(indict.get('group_sharings', None),
+           resmaps, mship_basekey='group_sharings', memtype='groups',
+           srcmap_idkey='group', get_subtype_fn=lambda v: 'groups',
+        )
+
+
+    def run_specific(self, indict):
+        if not isinstance(indict, MutableMapping):
+            raise AnsibleOptionsError(
+               "filter input must be a dictionary, but given value"\
+               " '{}' has type '{}'".format(indict, type(indict))
+            )
+
+        resmaps = {
+          'smabot_git_gitlab_manage_groups_and_repos_args': {},
+        }
+
+        self._handle_user_memberships(indict, resmaps)
+        self._handle_group_sharings(indict, resmaps)
+
+        return resmaps
+
+
+
 # ---- Ansible filters ----
 class FilterModule(object):
     ''' generic dictionary filters '''
@@ -146,6 +223,7 @@ class FilterModule(object):
 
         tmp = [
           ConvertHashiVaultCfgFilter,
+          ConvertIllegalMembershipsAbsentingCfgFilter,
         ]
 
         for f in tmp:
