@@ -1,0 +1,8 @@
+---
+
+    ##
+    ## NOTE: currently we use the same method here as
+    ##   ansible_variables type and special later on secret save
+    ##
+  - include_tasks: ../ansible_variables/main.yml
+

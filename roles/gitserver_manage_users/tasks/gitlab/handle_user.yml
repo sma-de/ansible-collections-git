@@ -1,0 +1,40 @@
+---
+
+  - set_fact:
+      _tmp_user_create_modargs: {}
+    when: _tmp_new_user_pw is falsy
+
+
+    ## add new password to user mod args
+  - set_fact:
+      _tmp_user_create_modargs:
+        password: "{{ _tmp_new_user_pw }}"
+    when: _tmp_new_user_pw is truthy
+    no_log: true
+
+
+    ## combine final mod args
+  - set_fact:
+      _tmp_user_create_modargs: >-
+        {{ _tmp_user_create_modargs
+         | combine(_iter_gitsrv_users.value._export_configs.user_manage) }}
+    when: _tmp_new_user_pw is falsy
+    no_log: true
+
+  - name: create/update/delete gitlab user account
+    smabot.git.gitlab_user_ext: >-
+      {{ _tmp_user_create_modargs }}
+
+
+  - set_fact:
+      _tmp_modargs: >-
+        {{ {} | combine({}) | combine({
+             'keys': _tmp_new_user_sshkeys,
+             'username': _tmp_user_create_modargs.username,
+           })
+        }}
+
+  - name: create/update/delete gitlab user ssh keys
+    smabot.git.gitlab_user_sshkeys: >-
+      {{ _tmp_modargs }}
+

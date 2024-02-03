@@ -1,0 +1,16 @@
+---
+
+    ## TODO: optionally support "flat mode" where each secret becomes its own var ??
+  - name: >-
+      make git server user credentials avaible as ansible map var
+       ==>>  {{ _iter_secret_stores.parameters.key_names.basevar }}
+    set_fact:
+      "{{ _iter_secret_stores.parameters.key_names.basevar }}": >-
+        {{ lookup('ansible.builtin.vars',
+             _iter_secret_stores.parameters.key_names.basevar,
+             default=False
+           ) | default({}, True) | combine(
+             _iter_secret_stores.secrets, recursive=True
+           ) }}
+     no_log: true
+

@@ -1,0 +1,5 @@
+---
+
+  - include_tasks: >-
+      {{ _iter_secret_stores.type }}/main.yml
+

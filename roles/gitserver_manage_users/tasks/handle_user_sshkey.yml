@@ -1,0 +1,105 @@
+---
+
+##_iter_gitsrv_users.value
+##_iter_usr_sshkeys.value
+
+  - set_fact:
+      _tmp_cur_cred: >-
+         {{ _iter_usr_sshkeys.value }}
+      _tmp_new_user_key:
+      _tmp_secret_type: sshkey_pair
+
+
+  - name: use preset sshkey verbatim
+    set_fact:
+      _tmp_new_user_key: >-
+         {{ _tmp_cur_cred.value }}
+    no_log: true
+    when: not _tmp_cur_cred.auto_create.enabled
+
+
+  - block:
+
+       ## credentials prepare section: for auto cycling case try to read current secret from default store
+       - block:
+
+           - set_fact:
+               _tmp_secret_setvar: _tmp_new_user_key
+
+           - include_tasks: secret_stores/read_secrets/main.yml
+             loop: >-
+               {{ [_tmp_cur_cred._default_store] }}
+             loop_control:
+               loop_var: _iter_secret_stores
+
+         when: not _tmp_cur_cred.auto_create.cycle
+
+
+       - block:
+
+           - name: create sshgen tmpdir
+             ansible.builtin.tempfile:
+               state: directory
+             register: _tmp_sshgen_tmpdir
+
+           - set_fact:
+               _tmp_modargs: >-
+                 {{ {} | combine(_tmp_cur_cred.auto_create.config)
+                  | combine({'path': _tmp_sshgen_tmpdir.path ~ '/sshkey'}) }}
+
+           - name: auto generate new ssh key pair for user
+             community.crypto.openssh_keypair: >-
+               {{ _tmp_modargs }}
+             register: _tmp_sshgen_keypub
+
+           - name: fetch private ssh key
+             ansible.builtin.slurp:
+               src: "{{ _tmp_sshgen_keypub.filename }}"
+             register: _tmp_sshgen_keypriv
+             no_log: true
+
+           - name: remove sshgen tmpdir again
+             ansible.builtin.file:
+               path: "{{ _tmp_sshgen_tmpdir.path }}"
+               state: absent
+
+             ## save private and public key to internally used variable in the correct format
+           - set_fact:
+               _tmp_new_user_key:
+                 pubkey: >-
+                   {{ _tmp_sshgen_keypub.public_key }}
+                 privkey: >-
+                   {{ _tmp_sshgen_keypriv.content | b64decode }}
+             no_log: true
+
+             ## clear sensitive "out-of-scope" tmp variables
+           - set_fact:
+               _tmp_sshgen_keypriv:
+
+         when: not _tmp_new_user_key.pubkey | default(False)
+
+
+       ## collect new user secret so we can later push it to defined secret stores
+       - include_tasks: secret_stores/collect_secrets/main.yml
+         loop: >-
+           {{ _tmp_cur_cred.stores | dict2items() | map(attribute='value') }}
+         loop_control:
+           loop_var: _iter_secret_stores
+
+    when: _tmp_cur_cred.auto_create.enabled
+
+
+    ##
+    ## add this ssh key to user key collection variable
+    ##
+  - set_fact:
+      _tmp_new_user_sshkeys: >-
+        {{ _tmp_new_user_sshkeys
+         | combine({_iter_usr_sshkeys.key: _tmp_new_user_key}) }}
+    no_log: true
+
+
+    ## clear sensitive "out-of-scope" tmp variables
+  - set_fact:
+      _tmp_new_user_key:
+

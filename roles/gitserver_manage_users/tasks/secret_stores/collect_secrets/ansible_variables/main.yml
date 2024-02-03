@@ -1,0 +1,37 @@
+---
+
+  - set_fact:
+      _tmp_secrets_map: >-
+        {{ {
+           _iter_secret_stores.parameters.key_names.password:
+              _tmp_new_user_pw,
+        } }}
+    when: _tmp_secret_type == 'password'
+    no_log: true
+
+
+  - set_fact:
+      _tmp_secrets_map: >-
+        {{ {
+          _iter_secret_stores.parameters.key_names.sshkey_public:
+             _tmp_new_user_key.pubkey,
+          _iter_secret_stores.parameters.key_names.sshkey_private:
+             _tmp_new_user_key.privkey,
+        } }}
+    when: _tmp_secret_type == 'sshkey_pair'
+    no_log: true
+
+
+  - set_fact:
+      _tmp_user_secrets: >-
+        {{ _tmp_user_secrets | combine({
+               _iter_secret_stores.name: _iter_secret_stores,
+             }, recursive=True) | combine({
+               _iter_secret_stores.name: {
+                 'secrets': {
+                   _iter_gitsrv_users.value.username: _tmp_secrets_map,
+                 },
+               },
+           }, recursive=True) }}
+    no_log: true
+

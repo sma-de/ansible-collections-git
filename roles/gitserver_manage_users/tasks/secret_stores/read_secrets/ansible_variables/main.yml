@@ -1,0 +1,21 @@
+---
+
+  - set_fact:
+      _tmp_secret_key: >-
+        {{ _iter_secret_stores.parameters.key_names.password }}
+    when: _tmp_secret_type == 'password'
+
+
+    ## TODO: optionally support "flat mode" where each secret becomes its own var ??
+  - name: try reading current secret from secret store
+    set_fact:
+      "{{ _tmp_secret_setvar }}": >-
+        {{ (lookup('ansible.builtin.vars',
+             _iter_secret_stores.parameters.key_names.basevar,
+             default=False
+           ) | default({}, True))[
+             _iter_gitsrv_users.value.username
+           ][_tmp_secret_key] | default(None)
+        }}
+    no_log: true
+

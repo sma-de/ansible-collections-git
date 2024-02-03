@@ -39,7 +39,7 @@ class GitlabBase(BaseAction):
           'api_url': {
             'type': list(string_types),
             'defaulting': {
-               'ansvar': ['auth_gitlab_url'],
+               'ansvar': ['auth_gitlab_url', 'auth_gitserver_url_gitlab', 'auth_gitserver_url'],
 ##         'env': '',
             },
           },
@@ -47,7 +47,7 @@ class GitlabBase(BaseAction):
           'api_token': {
             'type': list(string_types),
             'defaulting': {
-               'ansvar': ['auth_gitlab_token'],
+               'ansvar': ['auth_gitlab_token', 'auth_gitserver_token_gitlab', 'auth_gitserver_token'],
                'fallback': ''
             },
           },
@@ -55,7 +55,7 @@ class GitlabBase(BaseAction):
           'api_username': {
             'type': list(string_types),
             'defaulting': {
-               'ansvar': ['auth_gitlab_user'],
+               'ansvar': ['auth_gitlab_user', 'auth_gitserver_user_gitlab', 'auth_gitserver_user'],
                'fallback': ''
             },
           },
@@ -63,7 +63,7 @@ class GitlabBase(BaseAction):
           'api_password': {
             'type': list(string_types),
             'defaulting': {
-               'ansvar': ['auth_gitlab_pw'],
+               'ansvar': ['auth_gitlab_pw', 'auth_gitserver_pw_gitlab', 'auth_gitserver_pw'],
                'fallback': ''
             },
           },
@@ -71,7 +71,7 @@ class GitlabBase(BaseAction):
           'validate_certs': {
             'type': [bool],
             'defaulting': {
-               'ansvar': ['auth_gitlab_certval'],
+               'ansvar': ['auth_gitlab_certval', 'auth_gitserver_valcerts_gitlab', 'auth_gitserver_valcerts'],
                'fallback': True
             },
           },
@@ -153,7 +153,7 @@ class GitlabUserBase(GitlabBase):
         tmp = super(GitlabUserBase, self).argspec
 
         tmp.update({
-          'user': (list(string_types)),
+          'username': (list(string_types)),
         })
 
         return tmp
@@ -164,9 +164,9 @@ class GitlabUserBase(GitlabBase):
         return self.get_glusr()
 
 
-    def get_glusr(self, forced_reload=False):
+    def get_glusr(self, forced_reload=False, non_exist_okay=False):
         if not self._glusr or forced_reload:
-            usrname = self.get_taskparam('user')
+            usrname = self.get_taskparam('username')
 
             # get user object
             display.vv(
@@ -176,7 +176,10 @@ class GitlabUserBase(GitlabBase):
 
             tmp = self.gitlab_client.users.list(username=usrname)
 
-            if not tmp: 
+            if not tmp:
+                if non_exist_okay:
+                    return None
+
                 return AnsibleError(
                   "Could not find a gitlab user named '{}'".format(usrname)
                 )

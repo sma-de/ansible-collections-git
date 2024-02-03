@@ -1,0 +1,71 @@
+---
+
+    ## this role supports vars.d
+  - include_role:
+      name: smabot.base.expand_vardirs
+
+
+  - smabot.git.normalize_gitserver_manage_users_cfg:
+    register: _tmp_normres
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+  - set_fact:
+      smabot_git_gitserver_manage_users_args_normed: "{{ _tmp_normres.normalized }}"
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+
+  - name: set connection credentials when necessary
+    set_fact:
+      "{{ _iter_cred_vars.key }}": "{{ _iter_cred_vars.value }}"
+    loop: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.connection._export_vars.ansible
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_cred_vars
+
+    ## might contain confidential server credentials and user secrets
+    no_log: true
+
+
+  - set_fact:
+      _tmp_user_secrets: {}
+
+
+    # handle users
+  - include_tasks: handle_user.yml
+    loop: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.users | dict2items() }}
+    loop_control:
+      loop_var: _iter_gitsrv_users
+
+
+    ## as these vars might contain highly valuable secrets it is a good
+    ## idea to unset them after they are dont needed anymore
+  - name: unset connection credentials when necessary
+    set_fact:
+      "{{ _iter_cred_vars.key }}":
+    loop: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.connection._export_vars.ansible
+       | dict2items() }}
+    loop_control:
+      loop_var: _iter_cred_vars
+
+
+  ## when necessary, write back user secrets to secret stores
+  - include_tasks: secret_stores/handle_storing/main.yml
+    loop: >-
+      {{ _tmp_user_secrets | dict2items() | map(attribute='value') }}
+    loop_control:
+      loop_var: _iter_secret_stores
+
+
+  ## ensure temporary secret collecting var is cleaned
+  ## after it is not needed anymore
+  - name: clear internal tmp variables
+    set_fact:
+      _tmp_user_secrets:
+
