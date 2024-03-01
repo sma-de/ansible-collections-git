@@ -1,0 +1,5 @@
+---
+
+  - include_tasks: personal_access.yml
+    when: _iter_gitsrv_users.value.credentials.tokens.personal_access.config is truthy
+

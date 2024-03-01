@@ -13,6 +13,16 @@
   - set_fact:
       _tmp_secrets_map: >-
         {{ {
+           _iter_secret_stores.parameters.key_names.token:
+              _tmp_new_user_token,
+        } }}
+    when: _tmp_secret_type == 'token'
+    no_log: true
+
+
+  - set_fact:
+      _tmp_secrets_map: >-
+        {{ {
           _iter_secret_stores.parameters.key_names.sshkey_public:
              _tmp_new_user_key.pubkey,
           _iter_secret_stores.parameters.key_names.sshkey_private:
@@ -30,7 +40,8 @@
         {{ _tmp_secrets_map
          | combine(_iter_secret_stores.parameters.extra_values) }}
     no_log: true
-    when: _iter_secret_stores.parameters.extra_values is truthy
+    when: >-
+      (_iter_secret_stores.parameters.extra_values | default(False)) is truthy
 
 
   - set_fact:

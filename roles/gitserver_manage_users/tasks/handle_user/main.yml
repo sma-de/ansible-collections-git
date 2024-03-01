@@ -6,11 +6,11 @@
 
 
     ## credentials prepare section: for auto cycling case try to read current secret from default store
-  - include_tasks: handle_user_password.yml
+  - include_tasks: password.yml
     when: _iter_gitsrv_users.value.credentials.password is truthy
 
 
-  - include_tasks: handle_user_sshkey.yml
+  - include_tasks: sshkeys.yml
     loop: "{{ _iter_gitsrv_users.value.credentials.ssh_keys | dict2items }}"
     loop_control:
       loop_var: _iter_usr_sshkeys
@@ -18,5 +18,9 @@
 
     ## create/update/delete user account (this is server (api) specific)
   - include_tasks: >-
-      {{ smabot_git_gitserver_manage_users_args_normed.server_type }}/handle_user.yml
+      ../{{ smabot_git_gitserver_manage_users_args_normed.server_type }}/handle_user.yml
+
+
+  - include_tasks: tokens/main.yml
+    when: _iter_gitsrv_users.value.credentials.tokens is truthy
 

@@ -1,0 +1,14 @@
+---
+
+  - name: create/update/delete gitlab user personal access tokens
+    smabot.git.gitlab_user_tokens: >-
+      {{ _iter_gitsrv_users.value.credentials.tokens.personal_access.config }}
+    register: _tmp_modres
+    no_log: true
+
+
+  - set_fact:
+      _tmp_token_credmap: >-
+        {{ _tmp_modres.user_tokens.by_name }}
+    no_log: true
+

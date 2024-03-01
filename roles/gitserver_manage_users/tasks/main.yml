@@ -9,7 +9,7 @@
     register: _tmp_normres
 
     ## might contain confidential server credentials and user secrets
-    ##no_log: true
+    no_log: true
 
   - set_fact:
       smabot_git_gitserver_manage_users_args_normed: "{{ _tmp_normres.normalized }}"
@@ -36,7 +36,7 @@
 
 
     # handle users
-  - include_tasks: handle_user.yml
+  - include_tasks: handle_user/main.yml
     loop: >-
       {{ smabot_git_gitserver_manage_users_args_normed.users | dict2items() }}
     loop_control:
@@ -76,7 +76,7 @@
     ##   updated secrets are not written back to cred store
     ##   at all because of some other step failing
     ##
-  - include_tasks: handle_user_post_secrets.yml
+  - include_tasks: handle_user/post_secrets.yml
     loop: >-
       {{ smabot_git_gitserver_manage_users_args_normed.users | dict2items() }}
     loop_control:

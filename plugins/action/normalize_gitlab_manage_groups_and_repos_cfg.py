@@ -387,12 +387,16 @@ class GroupAbleInstNormerBase(NormalizerNamed):
 class AllMembersNormer(NormalizerBase):
 
     def __init__(self, pluginref, *args, **kwargs):
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'enable', DefaultSetterConstant(None)
         )
 
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'default_role', DefaultSetterConstant(GITLAB_ROLE_LEVEL_MIN)
+        )
+
+        self._add_defaultsetter(kwargs,
+          'forced_role', DefaultSetterConstant(None)
         )
 
         subnorms = kwargs.setdefault('sub_normalizers', [])
@@ -480,12 +484,16 @@ class AllMembersNormer(NormalizerBase):
 class MembersUsersGroupsBaseNormer(NormalizerBase):
 
     def __init__(self, pluginref, *args, **kwargs):
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'exclusive', DefaultSetterConstant(False)
         )
 
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'default_role', DefaultSetterConstant(None)
+        )
+
+        self._add_defaultsetter(kwargs,
+          'forced_role', DefaultSetterConstant(None)
         )
 
         subnorms = kwargs.setdefault('sub_normalizers', [])
@@ -507,6 +515,7 @@ class MembersUsersGroupsBaseNormer(NormalizerBase):
 
         ## if unset, inherit default role from parent
         setdefault_none(my_subcfg, 'default_role', pcfg['default_role'])
+        setdefault_none(my_subcfg, 'forced_role', pcfg['forced_role'])
         return my_subcfg
 
     def _modify_member_export_map(self, exmap, memkey, memval):
@@ -589,7 +598,14 @@ class MemberInstBaseNormer(NormalizerNamed):
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
         pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=2)
-        setdefault_none(my_subcfg, 'role', pcfg['default_role'])
+
+        force_role = pcfg['forced_role']
+
+        if force_role:
+            my_subcfg['role'] = force_role
+        else:
+            setdefault_none(my_subcfg, 'role', pcfg['default_role'])
+
         return my_subcfg
 
 

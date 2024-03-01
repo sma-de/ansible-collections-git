@@ -18,7 +18,6 @@
       _tmp_user_create_modargs: >-
         {{ _tmp_user_create_modargs
          | combine(_iter_gitsrv_users.value._export_configs.user_manage) }}
-    when: _tmp_new_user_pw is falsy
     no_log: true
 
   - name: create/update/delete gitlab user account
@@ -33,6 +32,7 @@
              'username': _tmp_user_create_modargs.username,
            })
         }}
+    no_log: true
 
   - name: create/update/delete gitlab user ssh keys
     smabot.git.gitlab_user_sshkeys: >-

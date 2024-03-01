@@ -56,6 +56,7 @@ class UserInstNormer(NormalizerNamed):
           UserCredsDefaults_Normer(pluginref),
           UserPW_Normer(pluginref),
           UserSshKey_Normer(pluginref),
+          UserPATokensAll_Normer(pluginref),
           UserMembershipsNormer(pluginref),
         ]
 
@@ -166,16 +167,20 @@ class UserInstNormer(NormalizerNamed):
 class UserMembershipsNormer(NormalizerBase):
 
     def __init__(self, pluginref, *args, **kwargs):
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'exclusive', DefaultSetterConstant(False)
         )
 
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'enable', DefaultSetterConstant(None)
         )
 
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'default_role', DefaultSetterConstant(None)
+        )
+
+        self._add_defaultsetter(kwargs,
+          'forced_role', DefaultSetterConstant(None)
         )
 
         subnorms = kwargs.setdefault('sub_normalizers', [])
@@ -423,6 +428,7 @@ class UserMembershipsTargetInstNormer(NormalizerNamed):
 
         tmp = {
           'default_role': pcfg['default_role'],
+          'forced_role': pcfg['forced_role'],
         }
 
         if not identgrp or is_identgrp:
@@ -474,6 +480,10 @@ class CredentialSettingsNormerBase(NormalizerBase):
     def has_value(self):
         return True
 
+    @property
+    def storeable(self):
+        return True
+
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
         if self.default_settings_distance:
             pcfg = self.get_parentcfg(cfg, cfgpath_abs,
@@ -514,6 +524,15 @@ class CredentialSettingsNormerBase(NormalizerBase):
 
         setdefault_none(ac, 'cycle', True)
         my_subcfg['auto_create'] = ac
+
+        if self.storeable:
+            stores = my_subcfg.get('stores', None)
+
+            if my_subcfg['auto_create']['enabled'] and not stores:
+                # create ansible variable default store
+                stores = {'ansible_variables': None}
+                my_subcfg['stores'] = stores
+
         return my_subcfg
 
 
@@ -575,7 +594,7 @@ class CredentialSettingsNormerBase(NormalizerBase):
             if tmp:
                 tmp(cfg, my_subcfg, cfgpath_abs, k, v)
 
-        if self.has_value:
+        if self.storeable:
             store_cnt = len(my_subcfg['stores'])
 
             if my_subcfg['auto_create']['enabled']:
@@ -600,7 +619,10 @@ class CredentialSettingsNormerBase(NormalizerBase):
                    "one secret store must be marked as default, if there is"\
                    " only one it should be made default automatically, if you"\
                    " defined more than one, you must set default to true for"\
-                   " one of them explicitly"
+                   " one of them explicitly, found '{}' stores"\
+                   " defined:\n{}".format(len(my_subcfg['stores']),
+                      my_subcfg['stores']
+                   )
                 )
 
                 ansible_assert(len(default_stores) == 1,
@@ -623,17 +645,25 @@ class UserCredsDefaults_Normer(CredentialSettingsNormerBase):
     def has_value(self):
         return False
 
-    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
-        my_subcfg = super()._handle_specifics_presub(cfg, my_subcfg, cfgpath_abs)
+    @property
+    def storeable(self):
+        return False
 
-        stores = my_subcfg['stores']
-
-        if my_subcfg['auto_create']['enabled'] and not stores:
-            # create ansible variable default store
-            stores = {'ansible_variables': None}
-            my_subcfg['stores'] = stores
-
-        return my_subcfg
+##    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+##        my_subcfg = super()._handle_specifics_presub(cfg, my_subcfg, cfgpath_abs)
+##
+##        ##
+##        ## update: bad idea of doing that here, what if a config only has
+##        ##   store explicitly defined for specific credentials
+##        ##
+##        ##stores = my_subcfg['stores']
+##
+##        ##if my_subcfg['auto_create']['enabled'] and not stores:
+##        ##    # create ansible variable default store
+##        ##    stores = {'ansible_variables': None}
+##        ##    my_subcfg['stores'] = stores
+##
+##        return my_subcfg
 
 
 class CredentialStoreInstNormer(NormalizerNamed):
@@ -666,6 +696,7 @@ class CredentialStoreInstNormer(NormalizerNamed):
         setdefault_none(vnames, 'password', 'password')
         setdefault_none(vnames, 'sshkey_public', 'sshkey_public_{cred_id}')
         setdefault_none(vnames, 'sshkey_private', 'sshkey_private_{cred_id}')
+        setdefault_none(vnames, 'token', 'token_{cred_id}')
 
         return my_subcfg
 
@@ -701,6 +732,7 @@ class CredentialStoreInstNormer(NormalizerNamed):
         return my_subcfg
 
 
+
 class UserPW_Normer(CredentialSettingsNormerBase):
 
     @property
@@ -721,8 +753,154 @@ class UserPW_Normer(CredentialSettingsNormerBase):
         ac_cfg = setdefault_none(my_subcfg['auto_create'], 'config', {})
 
         setdefault_none(ac_cfg, 'length', 80)
-
         return my_subcfg
+
+
+
+class UserPATokensAll_Normer(NormalizerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs,
+          'config', DefaultSetterConstant({})
+        )
+
+        self._add_defaultsetter(kwargs,
+          'exclusive', DefaultSetterConstant(False)
+        )
+
+        subnorms = kwargs.setdefault('sub_normalizers', [])
+        subnorms += [
+          UserPATokenInst_Normer(pluginref),
+        ]
+
+        super(UserPATokensAll_Normer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def config_path(self):
+        return ['credentials', 'tokens', 'personal_access']
+
+    def _handle_specifics_postsub_gitlab(self, cfg, my_subcfg, cfgpath_abs):
+        c = my_subcfg['config']
+        c['exclusive'] = my_subcfg['exclusive']
+
+        cfgmap = {}
+
+        for k,v in my_subcfg['tokens'].items():
+            cfgmap[v['name']] = v['config']
+
+        c['user_tokens'] = cfgmap
+
+        pcfg_usr = self.get_parentcfg(cfg, cfgpath_abs, level=3)
+        c['username'] = pcfg_usr['username']
+
+
+    def _handle_specifics_postsub(self, cfg, my_subcfg, cfgpath_abs):
+        if not my_subcfg['tokens'] and not my_subcfg['exclusive']:
+            return my_subcfg
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=5)
+        srvtype = pcfg['server_type']
+
+        tmp = getattr(self, '_handle_specifics_postsub_' + srvtype, None)
+
+        ansible_assert(tmp,
+           "unsupported git server type '{}'".format(srvtype)
+        )
+
+        tmp(cfg, my_subcfg, cfgpath_abs)
+        return my_subcfg
+
+
+
+class UserPATokenInst_Normer(NormalizerNamed, CredentialSettingsNormerBase):
+
+    def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs, 
+          'config', DefaultSetterConstant({})
+        )
+
+        super(UserPATokenInst_Normer, self).__init__(
+           pluginref, *args, **kwargs
+        )
+
+    @property
+    def default_settings_distance(self):
+        return 4
+
+    @property
+    def has_value(self):
+        return False
+
+    @property
+    def config_path(self):
+        return ['tokens', SUBDICT_METAKEY_ANY]
+
+    @property
+    def simpleform_key(self):
+        return 'scopes'
+
+    def _get_store_keynames_replacements(self, cfg, my_subcfg, cfgpath_abs,
+        store_id, store_map
+    ):
+        ## optionally overwriteable by subclasses
+        return {'cred_id': cfgpath_abs[-1]}
+
+
+    def _handle_specifics_presub_gitlab(self, cfg, my_subcfg, cfgpath_abs):
+        c = my_subcfg['config']
+        defstate = 'present'
+
+        if my_subcfg['auto_create']['cycle']:
+            defstate = 'update'
+
+        c['state'] = defstate
+
+        tmp = my_subcfg.get('type', None)
+        if tmp:
+            c['type'] = tmp
+
+
+    def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
+        my_subcfg = super()._handle_specifics_presub(cfg, my_subcfg, cfgpath_abs)
+
+        scp = my_subcfg['scopes']
+
+        if isinstance(scp, string_types):
+            scp = {scp: None}
+
+        tmp = []
+
+        ## normalize scopes to list
+        for k, v in scp.items():
+            if v is None:
+                v = True
+
+            if not v:
+                continue
+
+            tmp.append(k)
+
+        scp = tmp
+
+        my_subcfg['scopes'] = scp
+
+        c = my_subcfg['config']
+        c['scopes'] = scp
+
+        pcfg = self.get_parentcfg(cfg, cfgpath_abs, level=7)
+        srvtype = pcfg['server_type']
+
+        tmp = getattr(self, '_handle_specifics_presub_' + srvtype, None)
+
+        ansible_assert(tmp,
+           "unsupported git server type '{}'".format(srvtype)
+        )
+
+        tmp(cfg, my_subcfg, cfgpath_abs)
+        return my_subcfg
+
 
 
 class UserSshKey_Normer(CredentialSettingsNormerBase):

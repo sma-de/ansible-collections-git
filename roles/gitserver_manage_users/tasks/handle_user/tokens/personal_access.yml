@@ -1,0 +1,22 @@
+---
+
+  - set_fact:
+      _tmp_token_credmap: {}
+
+
+    ## handle pa tokens server specific
+  - include_tasks: >-
+      ../../../{{ smabot_git_gitserver_manage_users_args_normed.server_type }}/handle_pa_tokens.yml
+
+
+  - include_tasks: prepare_secret_stores.yml
+    loop: >-
+      {{ _iter_gitsrv_users.value.credentials.tokens.personal_access.tokens
+       | dict2items }}
+    when: >-
+      {{ (_tmp_token_credmap[_item_pa_token.value.name].token
+       | default(False)) is truthy }}
+    loop_control:
+      loop_var: _item_pa_token
+      label: "{{ _item_pa_token.value.name }}"
+
