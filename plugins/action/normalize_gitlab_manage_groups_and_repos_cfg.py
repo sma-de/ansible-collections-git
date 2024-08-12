@@ -467,7 +467,7 @@ class AllMembersNormer(NormalizerBase):
 
         c = my_subcfg['config']
 
-        ## TODO: support extended attributes fro projects
+        ## TODO: support extended attributes from projects
         c['gitlab_users_access' ] = my_subcfg['users' ]['_members_export_lst']
 
         if 'project' not in c:

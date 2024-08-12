@@ -35,6 +35,8 @@ class ActionModule(GitlabBase):
         tmp.update({
           'group_id': (list(string_types)),
 
+          'optional': ([bool], False),
+
           'inverted': ([bool], False),
           'ignores': ([list(string_types)], []),
         })
@@ -93,13 +95,26 @@ class ActionModule(GitlabBase):
 
     def run_specific(self, result):
         mygrp_id = self.get_taskparam('group_id')
-        mygrp = self.get_group_by_id(mygrp_id)
+        mygrp = self.get_group_by_id(mygrp_id,
+           non_exist_okay=self.get_taskparam('optional')
+        )
 
         ignores = self.get_taskparam('ignores')
         inverted = self.get_taskparam('inverted')
 
-        result['group'] = mygrp.full_path
         result['inverted'] = inverted
+
+        if not mygrp:
+            ##
+            ## optional group for given id does not exist, as this
+            ##   is explicitly allowed by setting the optional
+            ##   flag, no error
+            ##
+            result['group'] = None
+            result['group_sharings'] = {}
+            return result
+
+        result['group'] = mygrp.full_path
 
         grpshares = {}
 

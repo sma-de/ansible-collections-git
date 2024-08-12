@@ -312,6 +312,12 @@ class UserMembershipsExclusiveNormer(NormalizerBase):
             gcfg['inverted'] = True
             gcfg['ignores'] = []
 
+            ##
+            ## on default dont fail on searching group
+            ## mappings because id-group does not exist yet
+            ##
+            setdefault_none(gcfg, 'optional', True)
+
             for k, v in pcfg['targets'].items():
                 if not v:
                     ## ignore disabled targets
