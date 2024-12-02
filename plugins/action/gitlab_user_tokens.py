@@ -5,6 +5,7 @@ __metaclass__ = type
 
 import collections
 import uuid
+import re
 
 ##from ansible.errors import AnsibleOptionsError, AnsibleModuleError##, AnsibleError
 ####from ansible.module_utils._text import to_native
@@ -34,6 +35,10 @@ EXPIRE_MAX_DAYS = 365 - 1
 
 class ActionModule(GitlabUserBase):
 
+    TRANSFERS_FILES = False
+    _requires_connection = False
+
+
     def __init__(self, *args, **kwargs):
         super(ActionModule, self).__init__(*args, **kwargs)
 
@@ -49,22 +54,37 @@ class ActionModule(GitlabUserBase):
           'user_tokens': ([collections.abc.Mapping]),
           'state': (list(string_types), 'present', ['present', 'absent', 'update']),
           'exclusive': ([bool], False),
+          'enable_token_version_mode': ([bool], True),
+
+          ## must match together with matcher regex
+          'token_version_suffix': (list(string_types), "-ver%Y%m%d-%H%M%S"),
+
+          'token_version_matcher': (list(string_types),
+              ##
+              ## must always contain 3 groups, one matching all prefix
+              ## text, one matching the complete versioned meta extra
+              ## text, one matching the suffix
+              ##
+              "(.*?)(-ver\d{8}-\d{6})(.*?)"
+          ),
         })
 
         return tmp
 
 
-    def _create_new_usrtoken(self, usr, cfg, 
-       result=None, rescol=None, state=None, **kwargs
+    def _create_new_usrtoken(self, usr, cfg,
+       result=None, rescol=None, state=None, extra_meta=None, **kwargs
     ):
         if not isinstance(cfg, collections.abc.Mapping):
             ## assume simple true/false bool
             cfg = {}
 
+        if extra_meta is None:
+            extra_meta = {}
+
         cfg.update(kwargs)
 
         expires = cfg.get('expires_at', None)
-
         tktype = cfg.pop('type', None) or 'pat'
 
         tk_create_fn = usr.personal_access_tokens.create
@@ -96,11 +116,24 @@ class ActionModule(GitlabUserBase):
                 cfg['expires_at'] = expires
 
         else:
-
             ansible_assert(False,
                "unsupported token type '{}', must be one"\
                " of these: {}".format(tktype, ['pat', 'impersonate'])
             )
+
+        do_tokvers = extra_meta.get('versioned', False)
+        tver_sfx = self.get_taskparam('token_version_suffix')
+        origname = cfg['name']
+
+        if do_tokvers:
+            ## create "versioned" token by auto adding version
+            ## suffix to given name
+            import datetime
+
+            cfg['name'] += datetime.datetime.now().strftime(tver_sfx)
+            extra_meta['versioned'] = True
+            tmp = extra_meta.setdefault('vertokens', {'active': []})
+            tmp['active'].insert(0, cfg['name'])
 
         tmp = tk_create_fn(cfg)
 
@@ -108,9 +141,11 @@ class ActionModule(GitlabUserBase):
             mdata = tmp.asdict()
             mdata.pop('token')
 
-            rescol[state][tmp.name] = {
+            rescol[state][origname] = {
               'token': tmp.token, 'metadata': mdata, 'type': tktype
             }
+
+            rescol[state][origname].update(extra_meta)
 
         if result is not None:
             result['changed'] = True
@@ -123,6 +158,10 @@ class ActionModule(GitlabUserBase):
 
         state = self.get_taskparam('state')
         exclusive = self.get_taskparam('exclusive')
+
+        ena_tokvers = self.get_taskparam('enable_token_version_mode')
+        tver_sfx = self.get_taskparam('token_version_suffix')
+        tver_matcher = self.get_taskparam('token_version_matcher')
 
         usrtoks = self.get_taskparam('user_tokens')
 
@@ -199,16 +238,81 @@ class ActionModule(GitlabUserBase):
 
         ## build impersonating token cache
         for imptk in usr.impersonationtokens.list(state='active'):
-            imp_tokens_cache[imptk.name] = imptk
+            tkname = imptk.name
 
-        for ut in tklist:
-            utname = ut.name
+            ## extract base name for versioned tokens
+            m = re.fullmatch(tver_matcher, tkname)
+
+            if m:
+                pre, ver, sfx = m.group(1, 2, 3)
+                tkname = pre + sfx
+
+            imp_tokens_cache[tkname] = imptk
+
+        ## group versioned token together as one unity
+        if ena_tokvers:
+            newlst = {}
+
+            for ut in tklist:
+                ## check if name of token matches the current
+                ## versioning pattern
+                m = re.fullmatch(tver_matcher, ut.name)
+
+                if not m:
+                    newlst[ut.name] = {'versioned': False, 'tokens': [ut]}
+                    continue
+
+                ## extract basename
+                pre, ver, sfx = m.group(1, 2, 3)
+                utn = pre + sfx
+
+                ## combine with other tokens of same version group
+                tmp = newlst.setdefault(utn,
+                  {'versioned': True, 'tokens': []}
+                )
+
+                tl = tmp['tokens']
+                tl.append(ut)
+                tl.sort(key=lambda x: x.name)
+
+                tmp['tokens'] = list(reversed(tl))
+
+            tklist = newlst
+
+        else:
+
+            newlst = {}
+
+            for ut in tklist:
+                newlst[ut.name] = [ut]
+
+            tklist = newlst
+
+        for utname, tkmeta in tklist.items():
+            tokens = tkmeta['tokens']
 
             display.vv(
               "ActionModule[run_specific] :: handle existing"\
-              " token '{}'".format(ut)
+              " token set '{}'".format(list(map(lambda x: x.name, tokens)))
               ##" token '{}'".format(utname)
             )
+
+            extra_meta = {}
+
+            if tkmeta['versioned']:
+                ansible_assert(ena_tokvers,
+                    "Found versioned token set for basename '{}',"\
+                    " but versioning is currently"\
+                    " disabled: {}".format(utname, tokens)
+                )
+
+                extra_meta['versioned'] = True
+                vtoks = []
+
+                for x in tokens:
+                    vtoks.append(x.name)
+
+                extra_meta['vertokens'] = { 'active': vtoks }
 
             newcfg = usrtoks.pop(utname, None)
 
@@ -219,19 +323,25 @@ class ActionModule(GitlabUserBase):
             if utname in imp_tokens_cache:
                 deftype = 'impersonate'
 
-
             if not newcfg:
                 # user token existing in gitlab not mentioned by 
                 # ansible config, when in exclusive mode delete it, 
                 # otherwise do nothing
                 if exclusive:
                     token_col['removed'][utname] = { 'reason': 'exclusive' }
+                    token_col['removed'][utname].update(extra_meta)
                     result['changed'] = True
-                    ut.delete()
+
+                    for ut in tokens:
+                        ut.delete()
+
                 else:
+
                     token_col['unchanged'][utname] = {
                       'metadata': ut.asdict(), 'type': deftype
                     }
+
+                    token_col['unchanged'][utname].update(extra_meta)
 
                 continue
 
@@ -255,7 +365,53 @@ class ActionModule(GitlabUserBase):
                   'metadata': ut.asdict(), 'type': newcfg['type']
                 }
 
+                token_col['unchanged'][utname].update(extra_meta)
                 continue
+
+            versions = newcfg.pop('versions', None)
+            vc = None
+
+            if versions:
+                if not isinstance(versions, collections.abc.Mapping):
+                    ## assume simple int for version count
+                    versions = { 'count': versions }
+
+                ansible_assert(ena_tokvers,
+                    "User token with name '{}' is configured to be"\
+                    " versioned, but versioning was globally disabled"\
+                    " by flag".format(utname)
+                )
+
+                if tkmeta['versioned']:
+                    ##
+                    ## if current token was already versioned, we adher
+                    ## to count, if we switched for a previously
+                    ## unversioned token to versioned we must remove
+                    ## all existing ones
+                    ##
+                    vc = versions.get('count', None)
+
+                    ansible_assert(vc,
+                        "Must give a version count when using token"\
+                        " versioning for token '{}'".format(utname)
+                    )
+
+                    vc = int(vc)
+
+                    ansible_assert(vc > 0,
+                        "Given version count must be a positive integer"\
+                        " number greater zero but was '{}'".format(vc)
+                    )
+
+                extra_meta['versioned'] = True
+            else:
+                ##
+                ## for the potential case where we switch from a versioned
+                ## token to a "normal" unversioned token make sure meta
+                ## data is correct
+                ##
+                extra_meta.pop('versioned', None)
+                extra_meta.pop('vertokens', None)
 
             # handle existing user token in gitlab also mentioned 
             # by ansible config depending on set state
@@ -270,7 +426,27 @@ class ActionModule(GitlabUserBase):
                   "ActionModule[run_specific] :: update token delete"
                 )
 
-                ut.delete()
+                deltoks = tokens
+
+                if vc:
+                    deltoks = deltoks[(vc - 1):]
+
+                rmtoks = []
+
+                for ut in deltoks:
+                    rmtoks.append(ut.name)
+                    ut.delete()
+
+                if versions:
+                    extra_meta.setdefault('vertokens', {}).update(removed=rmtoks)
+
+                    new_active = []
+
+                    for x in extra_meta['vertokens'].get('active', []):
+                        if x not in rmtoks:
+                            new_active.append(x)
+
+                    extra_meta['vertokens']['active'] = new_active
 
                 display.vvv(
                   "ActionModule[run_specific] :: update token recreate"
@@ -278,7 +454,7 @@ class ActionModule(GitlabUserBase):
 
                 self._create_new_usrtoken(
                    usr, newcfg, result, token_col, name=utname, 
-                   state='updated'
+                   state='updated', extra_meta=extra_meta,
                 )
 
                 display.vvv(
@@ -293,7 +469,11 @@ class ActionModule(GitlabUserBase):
                 )
 
                 token_col['removed'][utname] = { 'reason': 'absenting' }
-                ut.delete()
+                token_col['removed'][utname].update(extra_meta)
+
+                for ut in tokens:
+                    ut.delete()
+
                 result['changed'] = True
                 continue
 
@@ -314,8 +494,21 @@ class ActionModule(GitlabUserBase):
             if tkstate == 'absent':
                 continue
 
+            extra_meta = {}
+            versions = cfg.pop('versions', None)
+
+            if versions:
+                ansible_assert(ena_tokvers,
+                    "User token with name '{}' is configured to be"\
+                    " versioned, but versioning was globally disabled"\
+                    " by flag".format(name)
+                )
+
+                extra_meta['versioned'] = True
+                extra_meta['vertokens'] = {'active': []}
+
             self._create_new_usrtoken(usr, cfg, result, token_col, 
-              name=name, state='created'
+              name=name, state='created', extra_meta=extra_meta,
             )
 
         ##usr.save()

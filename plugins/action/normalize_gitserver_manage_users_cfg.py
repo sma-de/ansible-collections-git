@@ -531,6 +531,12 @@ class CredentialSettingsNormerBase(NormalizerBase):
         setdefault_none(ac, 'cycle', True)
         my_subcfg['auto_create'] = ac
 
+        auto_vers = ac.get('versions')
+
+        if auto_vers:
+            c = setdefault_none(my_subcfg, 'config', {})
+            c['versions'] = auto_vers
+
         if self.storeable:
             stores = my_subcfg.get('stores', None)
 
