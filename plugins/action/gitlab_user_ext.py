@@ -59,6 +59,7 @@ class ActionModule(GitlabUserBase):
 
           'confirm': ([bool], True),
           'external': ([bool] + [type(None)], None),
+          'isadmin': ([bool] + [type(None)], None),
 
           'state': (list(string_types), 'present'),
         })
