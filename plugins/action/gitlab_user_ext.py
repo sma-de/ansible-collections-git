@@ -30,6 +30,7 @@ class ActionModule(GitlabUserBase):
 
     UPSTREAM_FORWARDING_PARAMS = [
       'username', 'name', 'password', 'email', 'state', 'external',
+      'isadmin',
     ]
 
 
