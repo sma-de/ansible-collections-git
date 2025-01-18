@@ -44,6 +44,21 @@
       (_iter_secret_stores.parameters.extra_values | default(False)) is truthy
 
 
+    ##
+    ## optionally add username to secrets map when requested
+    ##
+  - set_fact:
+      _tmp_secrets_map: >-
+        {{ _tmp_secrets_map
+         | combine({
+            (_iter_secret_stores.parameters.key_names.user | default('user', True)):
+               _iter_gitsrv_users.value.username,
+         }) }}
+    no_log: true
+    when: >-
+      (_iter_secret_stores.parameters.user_as_secret | default(False)) is truthy
+
+
   - set_fact:
       _tmp_user_secrets: >-
         {{ _tmp_user_secrets | combine({
