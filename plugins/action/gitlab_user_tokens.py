@@ -72,6 +72,16 @@ class ActionModule(GitlabUserBase):
         return tmp
 
 
+    def configure_token_maxdate(self, cfg, days=EXPIRE_MAX_DAYS):
+        import datetime
+
+        expires = datetime.datetime.now()\
+                + datetime.timedelta(days=EXPIRE_MAX_DAYS)
+
+        expires = expires.strftime('%Y-%m-%d')
+        cfg['expires_at'] = expires
+
+
     def _create_new_usrtoken(self, usr, cfg,
        result=None, rescol=None, state=None, extra_meta=None, **kwargs
     ):
@@ -107,13 +117,7 @@ class ActionModule(GitlabUserBase):
                 ##   the gitserver instance has a custom configured
                 ##   lower max value
                 ##
-                import datetime
-
-                expires = datetime.datetime.now()\
-                        + datetime.timedelta(days=EXPIRE_MAX_DAYS)
-
-                expires = expires.strftime('%Y-%m-%d')
-                cfg['expires_at'] = expires
+                self.configure_token_maxdate(cfg)
 
         else:
             ansible_assert(False,
@@ -200,7 +204,8 @@ class ActionModule(GitlabUserBase):
         ##   sure we have access to the server all the time
         ##
         if self.gitlab_client.user.username == usr.username:
-            temp_token = {'name': str(uuid.uuid4()), 'scopes': ['api']}
+            temp_token = {'name': str(uuid.uuid4()), 'scopes': ['api', 'admin_mode']}
+            self.configure_token_maxdate(temp_token, days=1)
 
             display.vv(
               "ActionModule[run_specific] :: user to handle"\
@@ -225,7 +230,9 @@ class ActionModule(GitlabUserBase):
 
             temp_token = next(filter(
                lambda x: x.name == temp_token.name,
-               usr.impersonationtokens.list(state='active')
+                 self.gitlab_client.personal_access_tokens.list(
+                   user_id=usr.id, state='active',
+                 )
             ))
 
         display.vv(

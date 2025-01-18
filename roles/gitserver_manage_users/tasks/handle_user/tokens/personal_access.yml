@@ -14,8 +14,8 @@
       {{ _iter_gitsrv_users.value.credentials.tokens.personal_access.tokens
        | dict2items }}
     when: >-
-      {{ (_tmp_token_credmap[_item_pa_token.value.name].token
-       | default(False)) is truthy }}
+      (_tmp_token_credmap[_item_pa_token.value.name].token
+       | default(False)) is truthy
     loop_control:
       loop_var: _item_pa_token
       label: "{{ _item_pa_token.value.name }}"

@@ -59,6 +59,11 @@
       (_iter_secret_stores.parameters.user_as_secret | default(False)) is truthy
 
 
+##  - name: user secrets pre update new secret
+##    debug:
+##      var: _tmp_user_secrets
+
+
   - set_fact:
       _tmp_user_secrets: >-
         {{ _tmp_user_secrets | combine({
@@ -71,4 +76,9 @@
                },
            }, recursive=True) }}
     no_log: true
+
+
+##  - name: user secrets post update new secret
+##    debug:
+##      var: _tmp_user_secrets
 
