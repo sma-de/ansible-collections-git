@@ -30,10 +30,10 @@ display = Display()
 ##
 class ActionModule(GitlabBase):
 
-    UPSTREAM_USER_MODULE = 'community.general.gitlab_group_members'
+    UPSTREAM_USER_MODULE = 'community.general.gitlab_project_members'
 
     UPSTREAM_FORWARDING_PARAMS = [
-      'gitlab_group', 'purge_users', 'gitlab_users_access', 'state',
+      'project', 'purge_users', 'gitlab_users_access', 'state',
     ]
 
 
@@ -53,7 +53,7 @@ class ActionModule(GitlabBase):
           'purge_groups': ([[string_types]], []),
 
           ## upstream forwarding params
-          'gitlab_group': (list(string_types)),
+          'project': (list(string_types)),
 
           'gitlab_users_access': ([[collections.abc.Mapping]] + [type(None)], None),
           'purge_users': ([[string_types]] + [type(None)], None),
@@ -68,7 +68,7 @@ class ActionModule(GitlabBase):
         ##
         ## do extended pre stuff
         ##
-        mygrp = self.get_taskparam('gitlab_group')
+        myprj = self.get_taskparam('project')
         state = self.get_taskparam('state')
 
         modstate_group_members = {
@@ -123,7 +123,7 @@ class ActionModule(GitlabBase):
 
         if member_grps or grp_purge:
             given_grps = []
-            mygrp_obj = self.get_group_by_id(mygrp)
+            myprj_obj = self.get_project_by_id(myprj)
 
             for x in member_grps:
                 other = self.get_group_by_id(x['id'])
@@ -140,8 +140,8 @@ class ActionModule(GitlabBase):
                 )
 
                 ## check if sharing with right level exists already
-                other_shared = self.get_group_shared_groups(
-                   mygrp_obj
+                other_shared = self.get_project_shared_groups(
+                   myprj_obj
                 ).get(other.id, None)
 
                 state_grpmem_key = 'added'
@@ -151,7 +151,7 @@ class ActionModule(GitlabBase):
 
                 if other_shared:
                     if absenting:
-                        mygrp_obj.unshare(other.id)
+                        myprj_obj.unshare(other.id)
                         modstate_group_members['removed'][other.full_path] =\
                             {'reason': 'absenting'}
 
@@ -172,7 +172,7 @@ class ActionModule(GitlabBase):
                         ## wrong access level, it seems that to change
                         ## access level, group sharing must be
                         ## recreated with new level
-                        mygrp_obj.unshare(other.id)
+                        myprj_obj.unshare(other.id)
                         state_grpmem_key = 'updated'
 
                 elif absenting:
@@ -184,7 +184,7 @@ class ActionModule(GitlabBase):
 
                 if presenting:
                     ## create new/updated grp sharing
-                    mygrp_obj.share(other.id, mapped_role)
+                    myprj_obj.share(other.id, mapped_role)
 
                     modstate_group_members[state_grpmem_key][other.full_path] =\
                       state_grpmem_val
@@ -193,9 +193,9 @@ class ActionModule(GitlabBase):
 
             if grp_purge and presenting:
                 ## get all grp sharing and remove all not on explicit list
-                for x in mygrp_obj.shared_with_groups:
+                for x in myprj_obj.shared_with_groups:
                     if x['group_id'] not in given_grps:
-                        mygrp_obj.unshare(x['group_id'])
+                        myprj_obj.unshare(x['group_id'])
 
                         modstate_group_members['removed'][x['group_full_path']] =\
                             {'reason': 'purging'}

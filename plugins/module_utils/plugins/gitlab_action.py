@@ -163,7 +163,51 @@ class GitlabBase(BaseAction):
         )
 
 
-    def get_shared_groups(self, group):
+    def get_project_by_id(self, pid, non_exist_okay=False):
+        try:
+            ## case 1: given pid is numerical gitlab
+            ##   object id for group, so we can do direct access here
+            pid = int(pid)
+            return self.gitlab_client.projects.get(pid)
+        except ValueError:
+            pass
+
+        ## case 2: assume pid is string containing
+        ##   fullpath for group, use it to find group
+        display.vv(
+           "GitLabBase(get_project_by_id) :: search for project by"\
+           " its fullpath '{}' ...".format(pid)
+        )
+
+        for p in self.gitlab_client.projects.list(iterator=True):
+            ##display.vvv(
+            ##   "GitLabBase(get_project_by_id) :: examine"\
+            ##   " server group: {}".format(g)
+            ##)
+
+            if p.path_with_namespace == pid:
+                display.vv(
+                   "GitlabBase(get_project_by_id) :: found project on"\
+                   " server matching fullpath '{}'".format(pid)
+                )
+
+                ##
+                ## note: object returned by list is not necessary as
+                ##   complete as a direct group get, so instead of
+                ##   returning it directly use it only to get group
+                ##   id and return then the result of explicit get call
+                ##
+                return self.gitlab_client.projects.get(p.id)
+
+        if non_exist_okay:
+            return None
+
+        raise AnsibleError(
+          "could not find a gitlab group matching fullpath '{}'".format(pid)
+        )
+
+
+    def get_group_shared_groups(self, group):
         if isinstance(group, string_types + (int,)):
             group = self.get_group_by_id(group)
 
@@ -174,6 +218,24 @@ class GitlabBase(BaseAction):
         res = {}
 
         for x in group.shared_with_groups:
+            res[int(x['group_id'])] = x
+            res[x['group_id']] = x
+            res[x['group_full_path']] = x
+
+        return res
+
+
+    def get_project_shared_groups(self, prj):
+        if isinstance(prj, string_types + (int,)):
+            prj = self.get_project_by_id(prj)
+
+        ## otherwise assume project is already a proper gitlab project object
+
+        ## make shared groups avaible as mapping instead of default list
+        ## which makes working with it easier
+        res = {}
+
+        for x in prj.shared_with_groups:
             res[int(x['group_id'])] = x
             res[x['group_id']] = x
             res[x['group_full_path']] = x

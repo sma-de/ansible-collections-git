@@ -48,6 +48,7 @@ class ConfigRootNormalizer(GitServerBaseNormer):
         ]
 
         super(ConfigRootNormalizer, self).__init__(pluginref, *args, **kwargs)
+        self.default_setters['hide_secrets'] = DefaultSetterConstant(True)
 
 
     def _handle_specifics_presub(self, cfg, my_subcfg, cfgpath_abs):
@@ -467,16 +468,11 @@ class AllMembersNormer(NormalizerBase):
 
         c = my_subcfg['config']
 
-        ## TODO: support extended attributes from projects
         c['gitlab_users_access' ] = my_subcfg['users' ]['_members_export_lst']
-
-        if 'project' not in c:
-            c['gitlab_groups_access'] = my_subcfg['groups']['_members_export_lst']
+        c['gitlab_groups_access'] = my_subcfg['groups']['_members_export_lst']
 
         handle_exclusiveness(my_subcfg['users'], c, 'purge_users')
-
-        if 'project' not in c:
-            handle_exclusiveness(my_subcfg['groups'], c, 'purge_groups')
+        handle_exclusiveness(my_subcfg['groups'], c, 'purge_groups')
 
         return my_subcfg
 
