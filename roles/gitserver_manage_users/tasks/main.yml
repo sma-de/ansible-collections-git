@@ -9,13 +9,16 @@
     register: _tmp_normres
 
     ## might contain confidential server credentials and user secrets
-    no_log: true
+    no_log: >-
+     {{ (smabot_git_gitserver_manage_users_args.hide_secrets
+         | default(True)) != False }}
 
   - set_fact:
       smabot_git_gitserver_manage_users_args_normed: "{{ _tmp_normres.normalized }}"
 
     ## might contain confidential server credentials and user secrets
-    no_log: true
+    no_log: >-
+      {{ _tmp_normres.normalized.hide_secrets }}
 
 
   - name: set connection credentials when necessary
@@ -28,8 +31,8 @@
       loop_var: _iter_cred_vars
 
     ## might contain confidential server credentials and user secrets
-    no_log: true
-
+    no_log: >-
+      {{ smabot_git_gitserver_manage_users_args_normed.hide_secrets }}
 
   - set_fact:
       _tmp_user_secrets: {}

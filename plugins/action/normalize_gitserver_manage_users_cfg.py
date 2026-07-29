@@ -31,6 +31,10 @@ display = Display()
 class ConfigRootNormalizer(GitServerBaseNormer):
 
     def __init__(self, pluginref, *args, **kwargs):
+        self._add_defaultsetter(kwargs,
+          'hide_secrets', DefaultSetterConstant(True)
+        )
+
         subnorms = kwargs.setdefault('sub_normalizers', [])
         subnorms += [
           UserInstNormer(pluginref),
@@ -43,11 +47,11 @@ class ConfigRootNormalizer(GitServerBaseNormer):
 class UserInstNormer(NormalizerNamed):
 
     def __init__(self, pluginref, *args, **kwargs):
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'user_type', DefaultSetterConstant('standard')
         )
 
-        self._add_defaultsetter(kwargs, 
+        self._add_defaultsetter(kwargs,
           'config', DefaultSetterConstant({})
         )
 
