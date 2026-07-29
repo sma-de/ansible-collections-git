@@ -646,7 +646,7 @@ class CredentialSettingsNormerBase(NormalizerBase):
                    " found {}:\n{}".format(len(default_stores), default_stores)
                 )
 
-            my_subcfg['_default_store'] = default_stores[0]
+                my_subcfg['_default_store'] = default_stores[0]
 
         return my_subcfg
 
