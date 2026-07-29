@@ -83,7 +83,6 @@
 
       - set_fact:
           _tmp_bad_group_sharings:
-            group_sharings:
 
         ##
         ## get "illegal" user memberships
@@ -100,7 +99,8 @@
         smabot.git.gitlab_get_group_sharings: >-
           {{ _iter_gitsrv_users.value.memberships.exclusive.configs.groups }}
         register: _tmp_bad_group_sharings
-        when: _iter_gitsrv_users.value.memberships.exclusive.configs.groups is truthy
+        when: >-
+          _iter_gitsrv_users.value.memberships.exclusive.configs.groups is truthy
 
         ##
         ## build a second absenting call to upstream module
@@ -123,8 +123,8 @@
               name: smabot.git.gitlab_manage_groups_and_repos
 
         when: >-
-          _tmp_bad_user_memships.memberships is truthy
-          or _tmp_bad_group_sharings.group_sharings is truthy
+          _tmp_bad_user_memships.memberships is truthy or
+          (_tmp_bad_group_sharings.group_sharings | default(False)) is truthy
 
     when: _iter_gitsrv_users.value.memberships.exclusive.enable
 
