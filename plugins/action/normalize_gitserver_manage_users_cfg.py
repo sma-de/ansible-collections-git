@@ -948,7 +948,7 @@ class UserSshKey_Normer(CredentialSettingsNormerBase):
         if val is not None:
             if not isinstance(val, collections.abc.Mapping):
                 ## assume simple string containing public ssh key
-                val = {'public': val}
+                val = {'pubkey': val}
                 my_subcfg['value'] = val
 
         ac_cfg = setdefault_none(my_subcfg['auto_create'], 'config', {})
