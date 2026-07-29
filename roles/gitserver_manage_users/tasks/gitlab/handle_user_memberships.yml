@@ -83,6 +83,7 @@
 
       - set_fact:
           _tmp_bad_group_sharings:
+            group_sharings:
 
         ##
         ## get "illegal" user memberships
